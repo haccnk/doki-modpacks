@@ -1,0 +1,302 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --header-height: 4rem;
+  --color-brand: 16 185 129; /* Emerald default for Doki Modpack Hub */
+  --color-brand-hover: 5 150 105;
+  --color-brand-light: 52 211 153;
+  --color-brand-gradient: 6 182 212;
+  --color-brand-hex: #10B981;
+  --color-brand-gradient-hex: #06B6D4;
+  color-scheme: dark;
+}
+
+/* Theme Variant Classes */
+.theme-emerald {
+  --color-brand: 16 185 129;
+  --color-brand-hover: 5 150 105;
+  --color-brand-light: 52 211 153;
+  --color-brand-gradient: 6 182 212;
+  --color-brand-hex: #10B981;
+  --color-brand-gradient-hex: #06B6D4;
+}
+
+.theme-cyan {
+  --color-brand: 6 182 212;
+  --color-brand-hover: 8 145 178;
+  --color-brand-light: 34 211 238;
+  --color-brand-gradient: 59 130 246;
+  --color-brand-hex: #06B6D4;
+  --color-brand-gradient-hex: #3B82F6;
+}
+
+.theme-indigo {
+  --color-brand: 99 102 241;
+  --color-brand-hover: 79 70 229;
+  --color-brand-light: 129 140 248;
+  --color-brand-gradient: 168 85 247;
+  --color-brand-hex: #6366F1;
+  --color-brand-gradient-hex: #A855F7;
+}
+
+.theme-violet {
+  --color-brand: 139 92 246;
+  --color-brand-hover: 124 58 237;
+  --color-brand-light: 167 139 250;
+  --color-brand-gradient: 217 70 239;
+  --color-brand-hex: #8B5CF6;
+  --color-brand-gradient-hex: #D946EF;
+}
+
+.theme-amber {
+  --color-brand: 245 158 11;
+  --color-brand-hover: 217 119 6;
+  --color-brand-light: 251 191 36;
+  --color-brand-gradient: 239 68 68;
+  --color-brand-hex: #F59E0B;
+  --color-brand-gradient-hex: #EF4444;
+}
+
+html {
+  scroll-padding-top: var(--header-height);
+  background-color: #08090C;
+  color: #EDEDED;
+}
+
+/* Linear-like sleek minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #08090C;
+}
+::-webkit-scrollbar-thumb {
+  background: #232736;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-brand));
+}
+
+/* WCAG 2.2 AAA Accessible Focus State */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-brand));
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Modern Liquid Glass & Surface Cards */
+.liquid-glass {
+  background: rgba(10, 11, 18, 0.65);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.5),
+    0 16px 40px -10px rgba(0, 0, 0, 0.85);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.5),
+    0 24px 50px -8px rgba(0, 0, 0, 0.9),
+    0 0 35px -5px rgba(var(--color-brand), 0.3);
+}
+
+.liquid-glass-dock {
+  background: rgba(8, 9, 14, 0.75);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.6),
+    0 24px 50px -10px rgba(0, 0, 0, 0.9);
+}
+
+.liquid-glass-item {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.liquid-glass-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.05) 75%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.liquid-glass-item:hover::before {
+  transform: translateX(250%) skewX(-20deg);
+}
+
+.liquid-glass-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.3),
+    0 10px 28px -4px rgba(0, 0, 0, 0.55),
+    0 0 24px -2px rgba(var(--color-brand), 0.35);
+  transform: translateY(-2px) scale(1.03);
+}
+
+.liquid-glass-item:active {
+  transform: translateY(1px) scale(0.96);
+  transition-duration: 0.1s;
+}
+
+.liquid-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.liquid-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(var(--color-brand), 0.45);
+  box-shadow: 
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.25),
+    0 20px 45px -10px rgba(0, 0, 0, 0.8),
+    0 0 35px -5px rgba(var(--color-brand), 0.35);
+}
+
+.liquid-card:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.liquid-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.liquid-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.liquid-btn:hover::before {
+  transform: translateX(250%) skewX(-20deg);
+}
+
+.liquid-btn:hover {
+  transform: translateY(-1.5px) scale(1.025);
+  box-shadow: 0 10px 24px -4px rgba(var(--color-brand), 0.4);
+}
+
+.liquid-btn:active {
+  transform: translateY(1px) scale(0.96);
+}
+
+.liquid-glass-active {
+  background: rgba(var(--color-brand), 0.24) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(var(--color-brand), 0.6) !important;
+  box-shadow: 
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.4),
+    0 0 28px 0 rgba(var(--color-brand), 0.45) !important;
+}
+
+.glass-panel {
+  background: rgba(14, 16, 23, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(19, 21, 31, 0.85);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Subtle grid background */
+.bg-grid-subtle {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Dynamic Radial Hero Glow */
+.hero-glow {
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgb(var(--color-brand) / 0.18), transparent 70%);
+}
+
+/* Marquee Animations */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+
+.mask-fade-edges {
+  mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+}
+
+/* Pulsing Cybernetic Glow Ring */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px -3px rgb(var(--color-brand) / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 25px 2px rgb(var(--color-brand) / 0.65);
+  }
+}
+
+.cyber-glow-pulse {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* Pre-delivery motion preference check */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
