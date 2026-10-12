@@ -43,7 +43,13 @@ export class AuthService {
   public static async login(username: string, password: string): Promise<AuthSession> {
     await db.init();
 
-    const user = db.findUserByUsername(username);
+    let user = db.findUserByUsername(username);
+    if (!user) {
+      // Sync latest user registry from cloud in case user registered from another browser
+      await db.syncUsersFromCloud();
+      user = db.findUserByUsername(username);
+    }
+
     if (!user) {
       throw new AuthenticationError('Invalid username or password credentials.', 'INVALID_CREDENTIALS');
     }
@@ -95,7 +101,12 @@ export class AuthService {
       throw new AuthenticationError('Password must be at least 6 characters long.', 'VALIDATION_ERROR');
     }
 
-    const existingUser = db.findUserByUsername(cleanUsername);
+    let existingUser = db.findUserByUsername(cleanUsername);
+    if (!existingUser) {
+      await db.syncUsersFromCloud();
+      existingUser = db.findUserByUsername(cleanUsername);
+    }
+
     if (existingUser) {
       throw new AuthenticationError('Username is already taken. Please choose another.', 'USERNAME_TAKEN');
     }
@@ -113,7 +124,7 @@ export class AuthService {
       updatedAt: now,
     };
 
-    db.createUser(newUser);
+    await db.createUser(newUser);
 
     const token = generateSessionToken(newUser.id);
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;

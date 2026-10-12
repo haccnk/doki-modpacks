@@ -243,10 +243,11 @@ class DatabaseStore {
         const supabaseConfig = getSupabaseConfig();
         if (supabaseConfig) {
           try {
-            const [cloudModpacks, cloudConfig, cloudRequests] = await Promise.all([
+            const [cloudModpacks, cloudConfig, cloudRequests, cloudUsers] = await Promise.all([
               fetchCloudItem<Modpack[]>('modpacks'),
               fetchCloudItem<PlatformConfig>('platform_config'),
-              fetchCloudItem<PermissionRequest[]>('permission_requests')
+              fetchCloudItem<PermissionRequest[]>('permission_requests'),
+              fetchCloudItem<User[]>('users')
             ]);
 
             if (cloudModpacks && Array.isArray(cloudModpacks) && cloudModpacks.length > 0) {
@@ -276,6 +277,25 @@ class DatabaseStore {
               });
               this.saveToLocalStorage('permission_requests', cloudRequests);
             }
+
+            if (cloudUsers && Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+              cloudUsers.forEach(u => {
+                this.state.users.set(u.id, u);
+                if (idbSupported) idbPut('users', u);
+              });
+              const hasAdmin = Array.from(this.state.users.values()).some(u => u.username.toLowerCase() === 'doki');
+              if (!hasAdmin) {
+                const seed = await getSeedData();
+                const doki = seed.users.find(u => u.username.toLowerCase() === 'doki');
+                if (doki) {
+                  this.state.users.set(doki.id, doki);
+                  if (idbSupported) idbPut('users', doki);
+                }
+              }
+              this.saveToLocalStorage('users', Array.from(this.state.users.values()));
+            } else if (this.state.users.size > 0) {
+              saveCloudItem('users', Array.from(this.state.users.values()));
+            }
           } catch (cloudErr) {
             console.warn('[DatabaseStore] Supabase cloud sync warning:', cloudErr);
           }
@@ -299,6 +319,33 @@ class DatabaseStore {
   }
 
   // --- USER TABLE ---
+  public async syncUsersFromCloud(): Promise<void> {
+    const supabaseConfig = getSupabaseConfig();
+    if (!supabaseConfig) return;
+    try {
+      const cloudUsers = await fetchCloudItem<User[]>('users');
+      if (cloudUsers && Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+        let isBrowserCtx = this.isBrowser() && Boolean(window.indexedDB);
+        cloudUsers.forEach(u => {
+          this.state.users.set(u.id, u);
+          if (isBrowserCtx) idbPut('users', u);
+        });
+        const hasAdmin = Array.from(this.state.users.values()).some(u => u.username.toLowerCase() === 'doki');
+        if (!hasAdmin) {
+          const seed = await getSeedData();
+          const doki = seed.users.find(u => u.username.toLowerCase() === 'doki');
+          if (doki) {
+            this.state.users.set(doki.id, doki);
+            if (isBrowserCtx) idbPut('users', doki);
+          }
+        }
+        this.saveToLocalStorage('users', Array.from(this.state.users.values()));
+      }
+    } catch (e) {
+      console.warn('[DatabaseStore] syncUsersFromCloud warning:', e);
+    }
+  }
+
   public findUserById(id: string): User | null {
     return this.state.users.get(id) || null;
   }
@@ -312,10 +359,16 @@ class DatabaseStore {
     return null;
   }
 
-  public createUser(user: User): User {
+  public async createUser(user: User): Promise<User> {
+    // Pull any users registered from other browsers first
+    await this.syncUsersFromCloud();
+
     this.state.users.set(user.id, user);
     idbPut('users', user);
     this.saveToLocalStorage('users', Array.from(this.state.users.values()));
+
+    // Synchronize full user roster to Supabase cloud
+    saveCloudItem('users', Array.from(this.state.users.values()));
     return user;
   }
 
@@ -450,7 +503,8 @@ class DatabaseStore {
     return syncAllLocalToCloud(
       Array.from(this.state.modpacks.values()),
       this.state.platformConfig,
-      Array.from(this.state.permissionRequests.values())
+      Array.from(this.state.permissionRequests.values()),
+      Array.from(this.state.users.values())
     );
   }
 }

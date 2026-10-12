@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Modpack, PlatformConfig, PermissionRequest } from './types';
+import { User, Modpack, PlatformConfig, PermissionRequest } from './types';
 
 const STORAGE_URL_KEY = 'doki_supabase_url';
 const STORAGE_ANON_KEY = 'doki_supabase_key';
@@ -149,7 +149,8 @@ export async function saveCloudItem(key: string, value: any): Promise<boolean> {
 export async function syncAllLocalToCloud(
   modpacks: Modpack[],
   platformConfig: PlatformConfig | null,
-  permissionRequests: PermissionRequest[]
+  permissionRequests: PermissionRequest[],
+  users?: User[]
 ): Promise<{ success: boolean; message: string }> {
   const client = getSupabaseClient();
   if (!client) {
@@ -157,11 +158,15 @@ export async function syncAllLocalToCloud(
   }
 
   try {
-    const rows = [
+    const rows: Array<{ key: string; value: any; updated_at: string }> = [
       { key: 'modpacks', value: modpacks, updated_at: new Date().toISOString() },
       { key: 'platform_config', value: platformConfig, updated_at: new Date().toISOString() },
       { key: 'permission_requests', value: permissionRequests, updated_at: new Date().toISOString() }
     ];
+
+    if (users && users.length > 0) {
+      rows.push({ key: 'users', value: users, updated_at: new Date().toISOString() });
+    }
 
     const { error } = await client
       .from('app_storage')
@@ -173,7 +178,7 @@ export async function syncAllLocalToCloud(
 
     return { 
       success: true, 
-      message: `Successfully synchronized ${modpacks.length} modpack(s) and platform configurations to Supabase Cloud!` 
+      message: `Successfully synchronized ${modpacks.length} modpack(s), ${users?.length || 0} user(s), and platform configurations to Supabase Cloud!` 
     };
   } catch (err: any) {
     return { success: false, message: err?.message || 'Sync failed due to a network error' };
