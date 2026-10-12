@@ -51,9 +51,9 @@ export const LiveActivityMarquee: React.FC = () => {
     },
     {
       id: 'def-4',
-      label: 'Client Build Mirror',
-      status: 'Google Drive Direct Sync Ready',
-      tag: 'MIRROR',
+      label: 'Client Build Distribution',
+      status: 'Direct Client Download Ready',
+      tag: 'DIRECT',
       color: 'cyan',
       link: '/catalog'
     },

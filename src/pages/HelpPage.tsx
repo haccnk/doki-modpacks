@@ -10,23 +10,61 @@ import {
   CheckCircle2, 
   Sparkles, 
   LifeBuoy, 
-  MessageSquare, 
-  ShieldCheck, 
   Terminal, 
   BookOpen, 
   AlertCircle,
   Edit3,
-  ArrowRight,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  Search,
+  MessageCircleQuestion,
+  Tag
 } from 'lucide-react';
 import { useDoki } from '../context/DokiContext';
 import { sound } from '../utils/sound';
 import { BorderBeam } from '../components/BorderBeam';
+import { FAQItem } from '../backend/types';
+
+const DEFAULT_FAQS: FAQItem[] = [
+  {
+    id: 'faq-1',
+    question: 'What Java version is required to run Doki modpacks?',
+    answer: 'All modern Doki modpacks require 64-bit Java 21 LTS (OpenJDK, Eclipse Temurin, or Oracle). Older versions such as Java 8 or Java 17 will result in startup crashes on Fabric 0.16+.',
+    category: 'System & Installation'
+  },
+  {
+    id: 'faq-2',
+    question: 'How much RAM should I allocate in the launcher?',
+    answer: 'We recommend allocating 6 GB to 8 GB of RAM. Allocating less than 6 GB may cause stutters in heavily modded biomes, while allocating more than 10 GB can trigger JVM garbage collection latency spikes.',
+    category: 'Performance'
+  },
+  {
+    id: 'faq-3',
+    question: 'How do I access Closed Demo modpacks?',
+    answer: 'Closed Demo modpacks require permission authorization. Simply click the "Request Access" button on the modpack card and provide your player handle or reason. Admin moderators review requests promptly.',
+    category: 'Access & Permissions'
+  },
+  {
+    id: 'faq-4',
+    question: 'Can I install client-side shaders or performance mods?',
+    answer: 'Yes! Doki modpacks include Sodium and Iris by default for modern Fabric builds. You can drop your favorite shaders into the shaderpacks folder without modifying base config files.',
+    category: 'Modding & Customization'
+  },
+  {
+    id: 'faq-5',
+    question: 'Is multiplayer supported out of the box?',
+    answer: 'Yes! Our modpacks are balanced and stress-tested for both singleplayer and dedicated multiplayer servers. Official server pack archives are distributed alongside client releases.',
+    category: 'Multiplayer'
+  }
+];
 
 export const HelpPage: React.FC = () => {
   const { platformConfig, isAdmin } = useDoki();
   const navigate = useNavigate();
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [expandedFaqId, setExpandedFaqId] = useState<string | null>('faq-1');
+  const [faqSearch, setFaqSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   const title = platformConfig?.helpTitle || 'Community Support & Help Desk';
   const subtitle = platformConfig?.helpSubtitle || 'Need assistance setting up a modpack, configuring Java 21, or finding players? Join our official community channels.';
@@ -37,6 +75,26 @@ export const HelpPage: React.FC = () => {
   const imageUrl = platformConfig?.helpImageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop';
   const contactEmail = platformConfig?.helpContactEmail || 'support@doki-modpacks.io';
   const helpContent = platformConfig?.helpContent;
+
+  const faqs: FAQItem[] = (platformConfig?.faqs && platformConfig.faqs.length > 0)
+    ? platformConfig.faqs
+    : DEFAULT_FAQS;
+
+  const categories: string[] = ['ALL', ...Array.from(new Set(faqs.map(f => f.category).filter((c): c is string => Boolean(c))))];
+
+  const filteredFaqs = faqs.filter(faq => {
+    const matchesSearch = 
+      faq.question.toLowerCase().includes(faqSearch.toLowerCase()) ||
+      faq.answer.toLowerCase().includes(faqSearch.toLowerCase()) ||
+      (faq.category && faq.category.toLowerCase().includes(faqSearch.toLowerCase()));
+    const matchesCategory = selectedCategory === 'ALL' || faq.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const toggleFaq = (id: string) => {
+    sound.playSwitch();
+    setExpandedFaqId(prev => (prev === id ? null : id));
+  };
 
   const handleCopyEmail = () => {
     sound.playClick();
@@ -65,7 +123,7 @@ export const HelpPage: React.FC = () => {
             className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span>Customize Help Page (Admin)</span>
+            <span>Customize Help & FAQs (Admin)</span>
           </button>
         )}
       </div>
@@ -109,17 +167,142 @@ export const HelpPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Primary Community Links Grid */}
+      {/* FREQUENTLY ASKED QUESTIONS SECTION */}
       <section className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-xl font-sans font-bold text-white tracking-tight">
-              Official Community Hubs
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-white/[0.08] text-[11px] font-mono text-zinc-400">
+              <MessageCircleQuestion className="w-3.5 h-3.5 text-brand-light" />
+              <span>FREQUENTLY ASKED QUESTIONS</span>
+            </div>
+            <h2 className="text-2xl font-sans font-bold text-white tracking-tight">
+              Common Questions & Solutions
             </h2>
             <p className="text-xs text-zinc-400">
-              Connect directly with Doki, server moderators, and fellow adventurers.
+              Answers to technical setup, RAM, Java versions, and permission access.
             </p>
           </div>
+
+          {isAdmin && (
+            <button
+              onClick={() => {
+                sound.playClick();
+                navigate('/admin?tab=help');
+              }}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-mono text-zinc-300 flex items-center gap-1.5 self-start cursor-pointer transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Manage FAQs</span>
+            </button>
+          )}
+        </div>
+
+        {/* Search & Category Filter */}
+        <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+            <input
+              type="text"
+              value={faqSearch}
+              onChange={(e) => setFaqSearch(e.target.value)}
+              placeholder="Search questions or keywords..."
+              className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] focus:border-brand text-xs text-white placeholder:text-zinc-600 font-sans focus:outline-none"
+            />
+          </div>
+
+          {categories.length > 2 && (
+            <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    sound.playClick();
+                    setSelectedCategory(cat);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition-all cursor-pointer ${
+                    selectedCategory === cat
+                      ? 'bg-brand text-white font-bold'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* FAQ Accordion List */}
+        <div className="space-y-3">
+          {filteredFaqs.length === 0 ? (
+            <div className="p-10 rounded-2xl bg-zinc-950/60 border border-white/[0.08] text-center space-y-2">
+              <HelpCircle className="w-8 h-8 text-zinc-600 mx-auto" />
+              <p className="text-xs text-zinc-400">No questions match your query.</p>
+              <button
+                onClick={() => {
+                  setFaqSearch('');
+                  setSelectedCategory('ALL');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-xs font-mono text-white"
+              >
+                Clear Filters
+              </button>
+            </div>
+          ) : (
+            filteredFaqs.map((faq) => {
+              const isOpen = expandedFaqId === faq.id;
+
+              return (
+                <div
+                  key={faq.id}
+                  className="rounded-2xl liquid-glass liquid-glass-item border border-white/[0.08] overflow-hidden transition-all duration-200"
+                >
+                  <button
+                    onClick={() => toggleFaq(faq.id)}
+                    className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center text-brand-light shrink-0">
+                        <HelpCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm sm:text-base font-sans font-bold text-white tracking-tight">
+                          {faq.question}
+                        </h3>
+                        {faq.category && (
+                          <span className="inline-block text-[10px] font-mono text-zinc-400 mt-0.5">
+                            {faq.category}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={`p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180 text-brand-light border-brand/30' : ''}`}>
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-5 pb-6 pt-1 sm:px-6 sm:pb-6 text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans border-t border-white/[0.04] bg-zinc-950/40">
+                      <p className="pl-11 pr-4 whitespace-pre-wrap">{faq.answer}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
+      {/* Primary Community Links Grid */}
+      <section className="space-y-6">
+        <div className="space-y-1">
+          <h2 className="text-xl font-sans font-bold text-white tracking-tight">
+            Official Community Hubs
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Connect directly with Doki, server moderators, and fellow adventurers.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -259,7 +442,7 @@ export const HelpPage: React.FC = () => {
             <BookOpen className="w-4 h-4" />
           </div>
           <h2 className="text-sm font-mono uppercase tracking-wider text-brand-light font-bold">
-            Frequently Encountered Issues & Self-Help
+            Troubleshooting Guide & Architecture Notes
           </h2>
         </div>
 
@@ -295,7 +478,7 @@ export const HelpPage: React.FC = () => {
                 <span>3. Launcher Recommendations</span>
               </div>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                We strongly recommend **Prism Launcher** or **Modrinth App** for automated dependency resolution and seamless one-click zip importing.
+                We strongly recommend Prism Launcher or Modrinth App for automated dependency resolution and seamless one-click zip importing.
               </p>
             </div>
           </div>

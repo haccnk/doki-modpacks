@@ -1,8 +1,71 @@
-// Persistent In-Memory Database with Browser & Node Storage Adapters
+// Persistent In-Memory Database with IndexedDB & Browser Storage Adapters
 import { User, Modpack, PermissionRequest, PlatformConfig, AuthSession } from './types';
 import { getSeedData } from './seed';
 
 const STORAGE_KEY_PREFIX = 'doki_modpacks_db_';
+const DB_NAME = 'DokiModpackHub_v2';
+const DB_VERSION = 1;
+
+// IndexedDB Helper for high-capacity, durable browser storage
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      return reject(new Error('IndexedDB not available in current environment'));
+    }
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('users')) db.createObjectStore('users', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('modpacks')) db.createObjectStore('modpacks', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('permission_requests')) db.createObjectStore('permission_requests', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('platform_config')) db.createObjectStore('platform_config', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions', { keyPath: 'token' });
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbGetAll<T>(storeName: string): Promise<T[]> {
+  return openIDB().then(db => {
+    return new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = () => resolve((req.result || []) as T[]);
+      req.onerror = () => reject(req.error);
+    });
+  }).catch(() => [] as T[]);
+}
+
+function idbPut(storeName: string, item: any): Promise<void> {
+  return openIDB().then(db => {
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const req = store.put(item);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }).catch((err) => {
+    console.warn(`[DatabaseStore IDB] Write warning in ${storeName}:`, err);
+  });
+}
+
+function idbDelete(storeName: string, key: any): Promise<void> {
+  return openIDB().then(db => {
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }).catch((err) => {
+    console.warn(`[DatabaseStore IDB] Delete warning in ${storeName}:`, err);
+  });
+}
 
 interface DatabaseState {
   users: Map<string, User>;
@@ -25,25 +88,26 @@ class DatabaseStore {
   private initPromise: Promise<void> | null = null;
 
   private isBrowser(): boolean {
-    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+    return typeof window !== 'undefined';
   }
 
-  private saveToStorage(table: string, data: any) {
-    if (!this.isBrowser()) return;
+  private saveToLocalStorage(table: string, data: any) {
+    if (!this.isBrowser() || typeof window.localStorage === 'undefined') return;
     try {
       localStorage.setItem(`${STORAGE_KEY_PREFIX}${table}`, JSON.stringify(data));
-    } catch (err) {
-      console.warn(`[DatabaseStore] Storage write warning for '${table}':`, err);
+    } catch {
+      // LocalStorage quota may be exceeded when storing screenshots/images;
+      // IndexedDB handles durable persistence safely.
     }
   }
 
-  private loadFromStorage<T>(table: string): T | null {
-    if (!this.isBrowser()) return null;
+  private loadFromLocalStorage<T>(table: string): T | null {
+    if (!this.isBrowser() || typeof window.localStorage === 'undefined') return null;
     try {
       const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${table}`);
       return raw ? JSON.parse(raw) : null;
     } catch (err) {
-      console.warn(`[DatabaseStore] Storage parse warning for '${table}':`, err);
+      console.warn(`[DatabaseStore] LocalStorage parse warning for '${table}':`, err);
       return null;
     }
   }
@@ -54,57 +118,125 @@ class DatabaseStore {
 
     this.initPromise = (async () => {
       try {
-        // Load data from persistent browser storage
-        const storedUsers = this.loadFromStorage<User[]>('users');
-        const storedModpacks = this.loadFromStorage<Modpack[]>('modpacks');
-        const storedRequests = this.loadFromStorage<PermissionRequest[]>('permission_requests');
-        const storedConfig = this.loadFromStorage<PlatformConfig>('platform_config');
-        const storedSessions = this.loadFromStorage<AuthSession[]>('sessions');
+        let idbSupported = false;
+        let idbUsers: User[] = [];
+        let idbModpacks: Modpack[] = [];
+        let idbRequests: PermissionRequest[] = [];
+        let idbConfigs: PlatformConfig[] = [];
+        let idbSessions: AuthSession[] = [];
+        let isSeededMeta = false;
 
-        if (storedUsers && storedUsers.length > 0) {
-          storedUsers.forEach(u => this.state.users.set(u.id, u));
-          // Guarantee superAdmin 'doki' account is present in database
+        try {
+          if (this.isBrowser() && window.indexedDB) {
+            idbSupported = true;
+            const meta = await idbGetAll<{ key: string; value: boolean }>('meta');
+            isSeededMeta = meta.some(m => m.key === 'seeded' && m.value === true);
+            idbUsers = await idbGetAll<User>('users');
+            idbModpacks = await idbGetAll<Modpack>('modpacks');
+            idbRequests = await idbGetAll<PermissionRequest>('permission_requests');
+            idbConfigs = await idbGetAll<PlatformConfig>('platform_config');
+            idbSessions = await idbGetAll<AuthSession>('sessions');
+          }
+        } catch (e) {
+          console.warn('[DatabaseStore] IndexedDB check failed, falling back to localStorage:', e);
+          idbSupported = false;
+        }
+
+        const localUsers = this.loadFromLocalStorage<User[]>('users');
+        const localModpacks = this.loadFromLocalStorage<Modpack[]>('modpacks');
+        const localRequests = this.loadFromLocalStorage<PermissionRequest[]>('permission_requests');
+        const localConfig = this.loadFromLocalStorage<PlatformConfig>('platform_config');
+        const localSessions = this.loadFromLocalStorage<AuthSession[]>('sessions');
+        const localSeeded = typeof window !== 'undefined' && localStorage.getItem('doki_db_seeded') === 'true';
+
+        const hasExistingData =
+          isSeededMeta ||
+          localSeeded ||
+          idbModpacks.length > 0 ||
+          (localModpacks && localModpacks.length > 0) ||
+          idbUsers.length > 0 ||
+          (localUsers && localUsers.length > 0) ||
+          idbConfigs.length > 0 ||
+          localConfig !== null;
+
+        if (hasExistingData) {
+          // 1. Populate Users
+          const usersToLoad = idbUsers.length > 0 ? idbUsers : (localUsers || []);
+          usersToLoad.forEach(u => this.state.users.set(u.id, u));
+
+          // Guarantee superAdmin 'doki' account is present
           const hasAdmin = Array.from(this.state.users.values()).some(u => u.username.toLowerCase() === 'doki');
           if (!hasAdmin) {
             const seed = await getSeedData();
             const doki = seed.users.find(u => u.username.toLowerCase() === 'doki');
             if (doki) {
               this.state.users.set(doki.id, doki);
-              this.saveToStorage('users', Array.from(this.state.users.values()));
+              if (idbSupported) idbPut('users', doki);
+              this.saveToLocalStorage('users', Array.from(this.state.users.values()));
             }
           }
-        } else {
-          const seed = await getSeedData();
-          seed.users.forEach(u => this.state.users.set(u.id, u));
-          this.saveToStorage('users', seed.users);
-        }
 
-        if (storedModpacks && storedModpacks.length > 0) {
-          storedModpacks.forEach(m => this.state.modpacks.set(m.id, m));
-        } else {
-          const seed = await getSeedData();
-          seed.modpacks.forEach(m => this.state.modpacks.set(m.id, m));
-          this.saveToStorage('modpacks', seed.modpacks);
-        }
+          // 2. Populate Modpacks
+          const modpacksToLoad = idbModpacks.length > 0 ? idbModpacks : (localModpacks || []);
+          modpacksToLoad.forEach(m => this.state.modpacks.set(m.id, m));
 
-        if (storedConfig) {
-          this.state.platformConfig = storedConfig;
-        } else {
-          const seed = await getSeedData();
-          this.state.platformConfig = seed.platformConfig;
-          this.saveToStorage('platform_config', seed.platformConfig);
-        }
+          // 3. Populate Platform Config
+          if (idbConfigs.length > 0 && idbConfigs[0]) {
+            this.state.platformConfig = idbConfigs[0];
+          } else if (localConfig) {
+            this.state.platformConfig = localConfig;
+            if (idbSupported) idbPut('platform_config', localConfig);
+          } else {
+            const seed = await getSeedData();
+            this.state.platformConfig = seed.platformConfig;
+            if (idbSupported) idbPut('platform_config', seed.platformConfig);
+            this.saveToLocalStorage('platform_config', seed.platformConfig);
+          }
 
-        if (storedRequests && Array.isArray(storedRequests)) {
-          storedRequests.forEach(r => this.state.permissionRequests.set(r.id, r));
-        }
+          // 4. Populate Requests
+          const reqsToLoad = idbRequests.length > 0 ? idbRequests : (localRequests || []);
+          reqsToLoad.forEach(r => this.state.permissionRequests.set(r.id, r));
 
-        if (storedSessions && Array.isArray(storedSessions)) {
-          storedSessions.forEach(s => {
+          // 5. Populate Sessions
+          const sessionsToLoad = idbSessions.length > 0 ? idbSessions : (localSessions || []);
+          sessionsToLoad.forEach(s => {
             if (Date.now() <= s.expiresAt) {
               this.state.sessions.set(s.token, s);
             }
           });
+
+          // Sync any missing items from localStorage into IndexedDB for durability
+          if (idbSupported && idbModpacks.length === 0 && localModpacks && localModpacks.length > 0) {
+            for (const pack of localModpacks) {
+              await idbPut('modpacks', pack);
+            }
+          }
+        } else {
+          // Brand New First Load -> Seed baseline data
+          const seed = await getSeedData();
+          seed.users.forEach(u => {
+            this.state.users.set(u.id, u);
+            if (idbSupported) idbPut('users', u);
+          });
+          this.saveToLocalStorage('users', seed.users);
+
+          seed.modpacks.forEach(m => {
+            this.state.modpacks.set(m.id, m);
+            if (idbSupported) idbPut('modpacks', m);
+          });
+          this.saveToLocalStorage('modpacks', seed.modpacks);
+
+          this.state.platformConfig = seed.platformConfig;
+          if (idbSupported) idbPut('platform_config', seed.platformConfig);
+          this.saveToLocalStorage('platform_config', seed.platformConfig);
+
+          // Mark seeded flag so we never re-seed over deletions or modifications
+          if (idbSupported) {
+            await idbPut('meta', { key: 'seeded', value: true });
+          }
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('doki_db_seeded', 'true');
+          }
         }
       } catch (err) {
         console.error('[DatabaseStore] Initialization fallback triggered:', err);
@@ -140,18 +272,20 @@ class DatabaseStore {
 
   public createUser(user: User): User {
     this.state.users.set(user.id, user);
-    this.saveToStorage('users', Array.from(this.state.users.values()));
+    idbPut('users', user);
+    this.saveToLocalStorage('users', Array.from(this.state.users.values()));
     return user;
   }
 
   // --- SESSION STORE ---
   private saveSessions(): void {
     const activeSessions = Array.from(this.state.sessions.values()).filter(s => Date.now() <= s.expiresAt);
-    this.saveToStorage('sessions', activeSessions);
+    this.saveToLocalStorage('sessions', activeSessions);
   }
 
   public createSession(session: AuthSession): void {
     this.state.sessions.set(session.token, session);
+    idbPut('sessions', session);
     this.saveSessions();
   }
 
@@ -160,6 +294,7 @@ class DatabaseStore {
     if (!session) return null;
     if (Date.now() > session.expiresAt) {
       this.state.sessions.delete(token);
+      idbDelete('sessions', token);
       this.saveSessions();
       return null;
     }
@@ -168,6 +303,7 @@ class DatabaseStore {
 
   public deleteSession(token: string): void {
     this.state.sessions.delete(token);
+    idbDelete('sessions', token);
     this.saveSessions();
   }
 
@@ -191,14 +327,16 @@ class DatabaseStore {
 
   public saveModpack(modpack: Modpack): Modpack {
     this.state.modpacks.set(modpack.id, modpack);
-    this.saveToStorage('modpacks', Array.from(this.state.modpacks.values()));
+    idbPut('modpacks', modpack);
+    this.saveToLocalStorage('modpacks', Array.from(this.state.modpacks.values()));
     return modpack;
   }
 
   public deleteModpack(id: string): boolean {
     const existed = this.state.modpacks.delete(id);
     if (existed) {
-      this.saveToStorage('modpacks', Array.from(this.state.modpacks.values()));
+      idbDelete('modpacks', id);
+      this.saveToLocalStorage('modpacks', Array.from(this.state.modpacks.values()));
     }
     return existed;
   }
@@ -223,7 +361,8 @@ class DatabaseStore {
 
   public savePermissionRequest(req: PermissionRequest): PermissionRequest {
     this.state.permissionRequests.set(req.id, req);
-    this.saveToStorage('permission_requests', Array.from(this.state.permissionRequests.values()));
+    idbPut('permission_requests', req);
+    this.saveToLocalStorage('permission_requests', Array.from(this.state.permissionRequests.values()));
     return req;
   }
 
@@ -231,11 +370,11 @@ class DatabaseStore {
   public getPlatformConfig(): PlatformConfig {
     if (!this.state.platformConfig) {
       return {
-        id: "cfg_default",
+        id: "platform_cfg_default",
         siteTitle: "Doki's Modpacks Hub",
-        heroHeadline: "Minecraft 2: Biohazard",
-        heroSubtitle: "The Overworld Has Fallen. Survival Re-engineered.",
-        heroTagline: "Flagship Post-End Exploration Modpack",
+        heroHeadline: "Minecraft 2:",
+        heroSubtitle: "Biohazard.",
+        heroTagline: "Custom Crafted Adventure • Official Client Release",
         announcementText: "Flagship Release: Minecraft 2: Biohazard is Live",
         announcementUrl: "/modpack/minecraft-2-biohazard",
         catalogMode: "FEATURED_HERO",
@@ -256,7 +395,8 @@ class DatabaseStore {
 
   public savePlatformConfig(config: PlatformConfig): PlatformConfig {
     this.state.platformConfig = config;
-    this.saveToStorage('platform_config', config);
+    idbPut('platform_config', config);
+    this.saveToLocalStorage('platform_config', config);
     return config;
   }
 }
@@ -272,4 +412,3 @@ const globalForDb = (typeof globalThis !== 'undefined'
 
 export const db = globalForDb.__dokiDatabaseStoreInstance ?? new DatabaseStore();
 globalForDb.__dokiDatabaseStoreInstance = db;
-

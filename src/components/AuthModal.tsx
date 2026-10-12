@@ -381,7 +381,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <ul className="space-y-1.5 text-[11px] font-mono text-zinc-400">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>Immediate access to Google Drive mirrors</span>
+                  <span>Immediate access to official client downloads</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />

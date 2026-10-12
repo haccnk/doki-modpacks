@@ -123,7 +123,7 @@ export const AboutPage: React.FC = () => {
             </div>
             <h3 className="text-base font-sans font-bold text-white">Direct Client Mirrors</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              High-speed verified Google Drive mirrors, single-click zip import, and zero ad-wall hurdles for players.
+              High-speed verified client downloads, single-click zip import, and zero ad-wall hurdles for players.
             </p>
           </div>
         </div>

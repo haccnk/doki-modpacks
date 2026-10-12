@@ -72,7 +72,7 @@ Our flagship release, Minecraft 2: Biohazard, reimagines the post-Ender Dragon s
                 <Download className="w-4 h-4" />
                 <span>Direct Client Builds</span>
               </div>
-              <p className="text-[11px] text-zinc-400">Google Drive and high-speed anycast CDN mirrors for 1-click installs.</p>
+              <p className="text-[11px] text-zinc-400">High-speed anycast CDN mirrors and verified client archives for 1-click installs.</p>
             </div>
           </div>
 

@@ -21,6 +21,7 @@ import { CatalogPage } from './pages/CatalogPage';
 import { ModpackDetailPage } from './pages/ModpackDetailPage';
 import { AboutPage } from './pages/AboutPage';
 import { HelpPage } from './pages/HelpPage';
+import { CreditsPage } from './pages/CreditsPage';
 import { EngineeringPage } from './pages/EngineeringPage';
 import { AdminPage } from './pages/AdminPage';
 
@@ -86,6 +87,7 @@ export const AppContent: React.FC = () => {
           <Route path="/modpack/:slug" element={<ModpackDetailPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route path="/credits" element={<CreditsPage />} />
           <Route path="/engineering" element={<EngineeringPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<HomePage />} />

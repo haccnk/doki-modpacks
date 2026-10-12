@@ -31,6 +31,9 @@ export async function getSeedData(): Promise<{
     lifecycle: 'RELEASE',
     accessPolicy: 'OPEN_DOWNLOAD',
     isQuarantined: false,
+    releaseDate: '2026-10-11',
+    trailerUrl: 'https://www.youtube.com/watch?v=MmB9b5njVbA',
+    trailerTitle: 'Minecraft 2: Biohazard Cinematic Reveal Trailer',
     downloadMirror: 'https://drive.google.com/drive/folders/1aFzU3cR0nRVHCT-gzJSTNoRKEavO-VFk?usp=drive_link',
     bannerUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200',
     thumbnailUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=600',
@@ -84,6 +87,61 @@ Our flagship release, Minecraft 2: Biohazard, reimagines the post-Ender Dragon s
 
 Need personal 1-on-1 assistance? Join our official Discord or Facebook community!`,
     helpContactEmail: 'support@doki-modpacks.io',
+    faqs: [
+      {
+        id: 'faq-1',
+        question: 'What Java version is required to run Doki modpacks?',
+        answer: 'All modern Doki modpacks require 64-bit Java 21 LTS (OpenJDK, Eclipse Temurin, or Oracle). Older versions such as Java 8 or Java 17 will result in startup crashes on Fabric 0.16+.',
+        category: 'System & Installation'
+      },
+      {
+        id: 'faq-2',
+        question: 'How much RAM should I allocate in the launcher?',
+        answer: 'We recommend allocating 6 GB to 8 GB of RAM. Allocating less than 6 GB may cause stutters in heavily modded biomes, while allocating more than 10 GB can trigger JVM garbage collection latency spikes.',
+        category: 'Performance'
+      },
+      {
+        id: 'faq-3',
+        question: 'How do I access Closed Demo modpacks?',
+        answer: 'Closed Demo modpacks require permission authorization. Simply click the "Request Access" button on the modpack card and provide your player handle or reason. Admin moderators review requests promptly.',
+        category: 'Access & Permissions'
+      },
+      {
+        id: 'faq-4',
+        question: 'Can I install client-side shaders or performance mods?',
+        answer: 'Yes! Doki modpacks include Sodium and Iris by default for modern Fabric builds. You can drop your favorite shaders into the shaderpacks folder without modifying base config files.',
+        category: 'Modding & Customization'
+      },
+      {
+        id: 'faq-5',
+        question: 'Is multiplayer supported out of the box?',
+        answer: 'Yes! Our modpacks are balanced and stress-tested for both singleplayer and dedicated multiplayer servers. Official server pack archives are distributed alongside client releases.',
+        category: 'Multiplayer'
+      }
+    ],
+    creditsTitle: 'Credits & Acknowledgments',
+    creditsSubtitle: "Honoring the mod authors, engineers, testers, and community contributors who bring Doki's modpack worlds to life.",
+    creditsLastUpdated: 'October 2026',
+    creditsContent: `### Modding Community & Library Authors
+We express our deepest gratitude to the Minecraft modding community and fabricMC developers whose groundbreaking libraries make these adventures possible:
+* **Fabric Project & Loom Team** – For the lightweight, modular modding framework.
+* **CaffeineMC (JellySquid & Contributors)** – For Sodium, Lithium, and Phosphor rendering optimizations.
+* **Iris Shaders Team** – For next-generation shader pipeline support.
+* **Bespoke Environmental Designers** – For biome expansions, atmospheric audio engines, and creature models.
+
+---
+
+### Project Leadership & Direction
+* **Doki** – Lead Pack Architect, Balance Engineer, Lore Design & System Integration.
+* **PackOps Engineering Fleet** – High-speed distribution infrastructure, telemetry pipelines, and security protocols.
+
+---
+
+### Special Thanks
+* Dedicated Alpha & Closed Demo Playtesters who hunted down desync glitches and memory leaks.
+* The community members across Discord and Facebook for continuous feedback and bug reports.
+
+*All third-party mods belong to their respective authors and are distributed in accordance with their respective open-source and modpack distribution licenses.*`,
     marqueeEnabled: true,
     marqueeLabel: 'PackOps Live Telemetry',
     marqueePingText: 'Cluster Ping: 12ms',
@@ -105,9 +163,9 @@ Need personal 1-on-1 assistance? Join our official Discord or Facebook community
       },
       {
         id: 'mq-3',
-        label: 'Client Build Mirror',
-        status: 'Google Drive Direct Sync Ready',
-        tag: 'MIRROR',
+        label: 'Client Build Distribution',
+        status: 'Direct Client Download Ready',
+        tag: 'DIRECT',
         color: 'cyan',
         link: '/catalog'
       },

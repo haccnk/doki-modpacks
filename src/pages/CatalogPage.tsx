@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Package, 
   Download, 
@@ -7,12 +7,11 @@ import {
   ExternalLink, 
   AlertTriangle, 
   Search, 
-  Filter, 
   Sparkles, 
-  Sliders, 
   Plus, 
   ArrowRight,
-  Layers
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { useDoki } from '../context/DokiContext';
 import { Modpack, ModpackLifecycle } from '../backend/types';
@@ -20,6 +19,7 @@ import { sound } from '../utils/sound';
 import { PermissionRequestModal } from '../components/PermissionRequestModal';
 
 export const CatalogPage: React.FC = () => {
+  const navigate = useNavigate();
   const { modpacks, resolveDownload, isAdmin } = useDoki();
   const [selectedPackForRequest, setSelectedPackForRequest] = useState<Modpack | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,15 +40,21 @@ export const CatalogPage: React.FC = () => {
     return matchesSearch && matchesLifecycle && matchesPolicy;
   });
 
-  const handleDownloadClick = async (pack: Modpack) => {
+  const handleDownloadClick = async (e: React.MouseEvent, pack: Modpack) => {
+    e.stopPropagation();
     sound.playClick();
+
+    if (pack.lifecycle === 'COMING_SOON') {
+      return;
+    }
+
     if (pack.isQuarantined && !isAdmin) {
       sound.playFault();
       alert(`⚠️ Downloads for '${pack.title}' have been temporarily halted by Doki under Emergency Quarantine.`);
       return;
     }
 
-    if (pack.accessPolicy === 'NEED_PERMISSION' && !isAdmin) {
+    if ((pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin) {
       setSelectedPackForRequest(pack);
       return;
     }
@@ -59,17 +65,38 @@ export const CatalogPage: React.FC = () => {
     }
   };
 
-  const getLifecycleBadge = (lifecycle: string) => {
+  const handleCardClick = (slug: string) => {
+    sound.playClick();
+    navigate(`/modpack/${slug}`);
+  };
+
+  const getLifecycleBadge = (lifecycle: ModpackLifecycle | string) => {
     switch (lifecycle) {
       case 'RELEASE':
-        return 'bg-brand/15 text-brand-light border-brand/30';
-      case 'BETA':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-      case 'UPCOMING':
-        return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
-      case 'TEASER':
+        return {
+          label: 'RELEASE',
+          style: 'bg-brand/15 text-brand-light border-brand/30',
+        };
+      case 'DEMO':
+        return {
+          label: 'DEMO',
+          style: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+        };
+      case 'CLOSED_DEMO':
+        return {
+          label: 'CLOSED DEMO',
+          style: 'bg-purple-500/15 text-purple-300 border-purple-500/40',
+        };
+      case 'COMING_SOON':
+        return {
+          label: 'COMING SOON',
+          style: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+        };
       default:
-        return 'bg-zinc-800 text-zinc-300 border-white/10';
+        return {
+          label: lifecycle,
+          style: 'bg-zinc-800 text-zinc-300 border-white/10',
+        };
     }
   };
 
@@ -119,22 +146,22 @@ export const CatalogPage: React.FC = () => {
 
           {/* Filter Pills */}
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <div className="flex items-center gap-1 bg-zinc-900/80 p-1 rounded-xl border border-white/[0.06] text-xs font-mono">
+            <div className="flex items-center gap-1 bg-zinc-900/80 p-1 rounded-xl border border-white/[0.06] text-xs font-mono overflow-x-auto">
               <span className="text-[10px] text-zinc-500 px-2 uppercase">Lifecycle:</span>
-              {['ALL', 'RELEASE', 'BETA', 'UPCOMING'].map((status) => (
+              {['ALL', 'RELEASE', 'DEMO', 'CLOSED_DEMO', 'COMING_SOON'].map((status) => (
                 <button
                   key={status}
                   onClick={() => {
                     sound.playClick();
                     setLifecycleFilter(status);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap ${
                     lifecycleFilter === status
                       ? 'bg-brand text-white font-bold shadow-sm'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  {status}
+                  {status === 'CLOSED_DEMO' ? 'CLOSED DEMO' : status === 'COMING_SOON' ? 'COMING SOON' : status}
                 </button>
               ))}
             </div>
@@ -174,7 +201,7 @@ export const CatalogPage: React.FC = () => {
               setLifecycleFilter('ALL');
               setPolicyFilter('ALL');
             }}
-            className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-mono transition-colors"
+            className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-mono transition-colors cursor-pointer"
           >
             Reset Filters
           </button>
@@ -183,11 +210,13 @@ export const CatalogPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {filteredModpacks.map((pack) => {
             const isBiohazard = pack.slug === 'minecraft-2-biohazard';
+            const badge = getLifecycleBadge(pack.lifecycle);
 
             return (
               <div
                 key={pack.id}
-                className="rounded-2xl liquid-glass liquid-glass-item p-6 sm:p-8 flex flex-col justify-between space-y-6 relative overflow-hidden group shadow-xl"
+                onClick={() => handleCardClick(pack.slug)}
+                className="rounded-2xl liquid-glass liquid-glass-item p-6 sm:p-8 flex flex-col justify-between space-y-6 relative overflow-hidden group shadow-xl cursor-pointer hover:-translate-y-0.5 hover:shadow-brand/5"
               >
                 {/* Quarantine Warning Ribbon */}
                 {pack.isQuarantined && (
@@ -209,8 +238,8 @@ export const CatalogPage: React.FC = () => {
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                       <div className="absolute top-3 left-3 flex items-center gap-2">
-                        <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold ${getLifecycleBadge(pack.lifecycle)}`}>
-                          {pack.lifecycle}
+                        <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold ${badge.style}`}>
+                          {badge.label}
                         </span>
                       </div>
                       {isBiohazard && (
@@ -227,20 +256,24 @@ export const CatalogPage: React.FC = () => {
                   {/* Title & Description */}
                   <div>
                     <div className="flex items-center justify-between">
-                      <Link
-                        to={`/modpack/${pack.slug}`}
-                        onClick={() => sound.playClick()}
-                        className="text-2xl font-sans font-bold text-white tracking-tight group-hover:text-brand-light transition-colors flex items-center gap-2"
-                      >
+                      <h3 className="text-2xl font-sans font-bold text-white tracking-tight group-hover:text-brand-light transition-colors flex items-center gap-2">
                         <span>{pack.title}</span>
-                      </Link>
+                      </h3>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-white/10">
-                        {pack.accessPolicy === 'OPEN_DOWNLOAD' ? 'OPEN ACCESS' : 'RESTRICTED'}
+                        {pack.lifecycle === 'CLOSED_DEMO' ? 'PERMISSION ONLY' : pack.accessPolicy === 'OPEN_DOWNLOAD' ? 'OPEN ACCESS' : 'RESTRICTED'}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 mt-1 font-mono">
-                      Target Engine: Minecraft {pack.specs.minecraftVersion} ({pack.specs.modLoader})
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-zinc-400 font-mono">
+                      <span>Minecraft {pack.specs.minecraftVersion} ({pack.specs.modLoader})</span>
+                      {pack.releaseDate && (
+                        <span className="flex items-center gap-1 text-zinc-300">
+                          <Calendar className="w-3 h-3 text-brand-light" />
+                          <span>
+                            {pack.lifecycle === 'COMING_SOON' ? `Expected: ${pack.releaseDate}` : `Released: ${pack.releaseDate}`}
+                          </span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Lore Quote Box */}
@@ -260,7 +293,7 @@ export const CatalogPage: React.FC = () => {
                     </div>
                     <div className="p-2 rounded-lg bg-black/60 border border-white/[0.04]">
                       <div className="text-zinc-500 text-[10px]">JAVA</div>
-                      <div className="text-zinc-200 font-semibold">{pack.specs.javaRuntime.split(' ')[0]}</div>
+                      <div className="text-zinc-200 font-semibold">{pack.specs.javaRuntime ? pack.specs.javaRuntime.split(' ')[0] : 'Java 21'}</div>
                     </div>
                     <div className="p-2 rounded-lg bg-black/60 border border-white/[0.04]">
                       <div className="text-zinc-500 text-[10px]">RAM</div>
@@ -269,33 +302,36 @@ export const CatalogPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Bottom Actions */}
+                {/* Bottom Actions: Exactly 1 single download button */}
                 <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between gap-3">
-                  <Link
-                    to={`/modpack/${pack.slug}`}
-                    onClick={() => sound.playClick()}
-                    className="text-xs font-mono text-zinc-400 hover:text-white flex items-center gap-1 group-hover:translate-x-0.5 transition-transform"
-                  >
-                    <span>Full Details & Specs</span>
+                  <div className="text-xs font-mono text-zinc-400 group-hover:text-white flex items-center gap-1 group-hover:translate-x-0.5 transition-all">
+                    <span>Full Details, Trailer & Specs</span>
                     <ArrowRight className="w-3.5 h-3.5 text-brand-light" />
-                  </Link>
+                  </div>
 
                   <button
-                    onClick={() => handleDownloadClick(pack)}
+                    onClick={(e) => handleDownloadClick(e, pack)}
                     className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${
-                      pack.isQuarantined && !isAdmin
+                      pack.lifecycle === 'COMING_SOON'
+                        ? 'bg-zinc-800/80 text-amber-300 border border-amber-500/20 cursor-default'
+                        : pack.isQuarantined && !isAdmin
                         ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        : pack.accessPolicy === 'NEED_PERMISSION' && !isAdmin
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10'
+                        : (pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin
+                        ? 'bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30'
                         : 'bg-brand hover:bg-brand-hover text-white shadow-inner-light shadow-brand/30'
                     }`}
                   >
-                    {pack.isQuarantined && !isAdmin ? (
+                    {pack.lifecycle === 'COMING_SOON' ? (
+                      <>
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Coming Soon</span>
+                      </>
+                    ) : pack.isQuarantined && !isAdmin ? (
                       <>
                         <AlertTriangle className="w-3.5 h-3.5" />
-                        <span>Halted</span>
+                        <span>Downloads Halted</span>
                       </>
-                    ) : pack.accessPolicy === 'NEED_PERMISSION' && !isAdmin ? (
+                    ) : (pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin ? (
                       <>
                         <Lock className="w-3.5 h-3.5" />
                         <span>Request Access</span>
@@ -303,7 +339,7 @@ export const CatalogPage: React.FC = () => {
                     ) : (
                       <>
                         <Download className="w-3.5 h-3.5" />
-                        <span>Download Client Build</span>
+                        <span>Download Modpack</span>
                         <ExternalLink className="w-3 h-3 text-white/80" />
                       </>
                     )}

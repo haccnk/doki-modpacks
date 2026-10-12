@@ -13,7 +13,7 @@ export interface User {
   updatedAt: string;
 }
 
-export type ModpackLifecycle = 'TEASER' | 'UPCOMING' | 'BETA' | 'RELEASE';
+export type ModpackLifecycle = 'DEMO' | 'CLOSED_DEMO' | 'COMING_SOON' | 'RELEASE';
 
 export type AccessPolicy = 'OPEN_DOWNLOAD' | 'NEED_PERMISSION';
 
@@ -44,6 +44,9 @@ export interface Modpack {
   themeHex: string;
   specs: ModpackTechnicalSpecs;
   featured: boolean;
+  releaseDate?: string;
+  trailerUrl?: string;
+  trailerTitle?: string;
   changelog?: string;
   screenshots?: string[];
   createdAt: string;
@@ -77,6 +80,13 @@ export interface MarqueeItem {
   color?: 'emerald' | 'cyan' | 'amber' | 'indigo' | 'rose' | 'violet';
 }
 
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  category?: string;
+}
+
 export interface PlatformConfig {
   id: string;
   siteTitle?: string;
@@ -100,6 +110,13 @@ export interface PlatformConfig {
   helpImageUrl?: string;
   helpContent?: string;
   helpContactEmail?: string;
+  // Frequently Asked Questions
+  faqs?: FAQItem[];
+  // Credits Page Customization
+  creditsTitle?: string;
+  creditsSubtitle?: string;
+  creditsContent?: string;
+  creditsLastUpdated?: string;
   // Top Information Bar (Live Telemetry & Announcements)
   marqueeEnabled?: boolean;
   marqueeLabel?: string;
@@ -130,6 +147,9 @@ export interface CreateModpackDTO {
   themeHex?: string;
   specs: ModpackTechnicalSpecs;
   featured?: boolean;
+  releaseDate?: string;
+  trailerUrl?: string;
+  trailerTitle?: string;
   changelog?: string;
   screenshots?: string[];
 }

@@ -32,10 +32,14 @@ import {
   ArrowDown,
   Eye,
   EyeOff,
+  Film,
+  Calendar,
+  MessageCircleQuestion,
+  Award,
   Disc as Discord
 } from 'lucide-react';
 import { useDoki } from '../context/DokiContext';
-import { Modpack, ModpackLifecycle, AccessPolicy, CreateModpackDTO, UpdateModpackDTO, MarqueeItem } from '../backend/types';
+import { Modpack, ModpackLifecycle, AccessPolicy, CreateModpackDTO, UpdateModpackDTO, MarqueeItem, FAQItem } from '../backend/types';
 import { sound } from '../utils/sound';
 import { BorderBeam } from '../components/BorderBeam';
 
@@ -57,7 +61,7 @@ export const AdminPage: React.FC = () => {
   } = useDoki();
 
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'modpacks' | 'customizer' | 'marquee' | 'help' | 'permissions'>('modpacks');
+  const [activeTab, setActiveTab] = useState<'modpacks' | 'customizer' | 'marquee' | 'help' | 'permissions' | 'credits'>('modpacks');
 
   // Modpack Edit Modal State
   const [editingPack, setEditingPack] = useState<Modpack | null>(null);
@@ -85,6 +89,9 @@ export const AdminPage: React.FC = () => {
   const [formMirror, setFormMirror] = useState('');
   const [formLifecycle, setFormLifecycle] = useState<ModpackLifecycle>('RELEASE');
   const [formPolicy, setFormPolicy] = useState<AccessPolicy>('OPEN_DOWNLOAD');
+  const [formReleaseDate, setFormReleaseDate] = useState('');
+  const [formTrailerUrl, setFormTrailerUrl] = useState('');
+  const [formTrailerTitle, setFormTrailerTitle] = useState('');
   const [formMcVersion, setFormMcVersion] = useState('1.20.1');
   const [formLoader, setFormLoader] = useState('Fabric 0.16.5');
   const [formJava, setFormJava] = useState('Java 21 LTS');
@@ -149,9 +156,9 @@ export const AdminPage: React.FC = () => {
     },
     {
       id: 'item-4',
-      label: 'Client Build Mirror',
-      status: 'Google Drive Direct Sync Ready',
-      tag: 'MIRROR',
+      label: 'Client Build Distribution',
+      status: 'Direct Client Download Ready',
+      tag: 'DIRECT',
       color: 'cyan',
       link: '/catalog'
     },
@@ -172,6 +179,69 @@ export const AdminPage: React.FC = () => {
     }
   ]);
 
+  // FAQ Management State
+  const [customFaqs, setCustomFaqs] = useState<FAQItem[]>(platformConfig?.faqs || [
+    {
+      id: 'faq-1',
+      question: 'What Java version is required to run Doki modpacks?',
+      answer: 'All modern Doki modpacks require 64-bit Java 21 LTS (OpenJDK, Eclipse Temurin, or Oracle). Older versions such as Java 8 or Java 17 will result in startup crashes on Fabric 0.16+.',
+      category: 'System & Installation'
+    },
+    {
+      id: 'faq-2',
+      question: 'How much RAM should I allocate in the launcher?',
+      answer: 'We recommend allocating 6 GB to 8 GB of RAM. Allocating less than 6 GB may cause stutters in heavily modded biomes, while allocating more than 10 GB can trigger JVM garbage collection latency spikes.',
+      category: 'Performance'
+    },
+    {
+      id: 'faq-3',
+      question: 'How do I access Closed Demo modpacks?',
+      answer: 'Closed Demo modpacks require permission authorization. Simply click the "Request Access" button on the modpack card and provide your player handle or reason. Admin moderators review requests promptly.',
+      category: 'Access & Permissions'
+    },
+    {
+      id: 'faq-4',
+      question: 'Can I install client-side shaders or performance mods?',
+      answer: 'Yes! Doki modpacks include Sodium and Iris by default for modern Fabric builds. You can drop your favorite shaders into the shaderpacks folder without modifying base config files.',
+      category: 'Modding & Customization'
+    },
+    {
+      id: 'faq-5',
+      question: 'Is multiplayer supported out of the box?',
+      answer: 'Yes! Our modpacks are balanced and stress-tested for both singleplayer and dedicated multiplayer servers. Official server pack archives are distributed alongside client releases.',
+      category: 'Multiplayer'
+    }
+  ]);
+  const [draftFaqQuestion, setDraftFaqQuestion] = useState('');
+  const [draftFaqAnswer, setDraftFaqAnswer] = useState('');
+  const [draftFaqCategory, setDraftFaqCategory] = useState('System & Installation');
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
+
+  // Credits Customizer State
+  const [customCreditsTitle, setCustomCreditsTitle] = useState(platformConfig?.creditsTitle || 'Credits & Acknowledgments');
+  const [customCreditsSubtitle, setCustomCreditsSubtitle] = useState(platformConfig?.creditsSubtitle || "Honoring the mod authors, engineers, testers, and community contributors who bring Doki's modpack worlds to life.");
+  const [customCreditsLastUpdated, setCustomCreditsLastUpdated] = useState(platformConfig?.creditsLastUpdated || 'October 2026');
+  const [customCreditsContent, setCustomCreditsContent] = useState(platformConfig?.creditsContent || `### Modding Community & Library Authors
+We express our deepest gratitude to the Minecraft modding community and fabricMC developers whose groundbreaking libraries make these adventures possible:
+* **Fabric Project & Loom Team** – For the lightweight, modular modding framework.
+* **CaffeineMC (JellySquid & Contributors)** – For Sodium, Lithium, and Phosphor rendering optimizations.
+* **Iris Shaders Team** – For next-generation shader pipeline support.
+* **Bespoke Environmental Designers** – For biome expansions, atmospheric audio engines, and creature models.
+
+---
+
+### Project Leadership & Direction
+* **Doki** – Lead Pack Architect, Balance Engineer, Lore Design & System Integration.
+* **PackOps Engineering Fleet** – High-speed distribution infrastructure, telemetry pipelines, and security protocols.
+
+---
+
+### Special Thanks
+* Dedicated Alpha & Closed Demo Playtesters who hunted down desync glitches and memory leaks.
+* The community members across Discord and Facebook for continuous feedback and bug reports.
+
+*All third-party mods belong to their respective authors and are distributed in accordance with their respective open-source and modpack distribution licenses.*`);
+
   // Draft new marquee item
   const [draftLabel, setDraftLabel] = useState('');
   const [draftStatus, setDraftStatus] = useState('');
@@ -181,16 +251,67 @@ export const AdminPage: React.FC = () => {
 
   const [isSavedCustomizer, setIsSavedCustomizer] = useState(false);
 
-  // Image Upload helper (file to base64 Data URL)
-  const handleImageUpload = (file: File, callback: (result: string) => void) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        callback(reader.result);
-        sound.playSuccess();
+  // Canvas-based image compressor to safely fit in storage without quota issues
+  const compressImage = (file: File, maxWidth = 1280, maxHeight = 1280, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      };
+      img.src = objectUrl;
+    });
+  };
+
+  // Image Upload helper (file to compressed base64 Data URL)
+  const handleImageUpload = async (file: File, callback: (result: string) => void) => {
+    try {
+      const compressed = await compressImage(file);
+      callback(compressed);
+      sound.playSuccess();
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          callback(reader.result);
+          sound.playSuccess();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Sync customizer with platformConfig on load
@@ -216,6 +337,22 @@ export const AdminPage: React.FC = () => {
       setCustomHelpImageUrl(platformConfig.helpImageUrl || '');
       setCustomHelpContent(platformConfig.helpContent || '');
       setCustomHelpContactEmail(platformConfig.helpContactEmail || 'support@doki-modpacks.io');
+
+      if (platformConfig.faqs && platformConfig.faqs.length > 0) {
+        setCustomFaqs(platformConfig.faqs);
+      }
+      if (platformConfig.creditsTitle) {
+        setCustomCreditsTitle(platformConfig.creditsTitle);
+      }
+      if (platformConfig.creditsSubtitle) {
+        setCustomCreditsSubtitle(platformConfig.creditsSubtitle);
+      }
+      if (platformConfig.creditsLastUpdated) {
+        setCustomCreditsLastUpdated(platformConfig.creditsLastUpdated);
+      }
+      if (platformConfig.creditsContent) {
+        setCustomCreditsContent(platformConfig.creditsContent);
+      }
 
       if (platformConfig.marqueeEnabled !== undefined) {
         setCustomMarqueeEnabled(platformConfig.marqueeEnabled);
@@ -243,7 +380,7 @@ export const AdminPage: React.FC = () => {
     }
 
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'help' || tabParam === 'customizer' || tabParam === 'marquee' || tabParam === 'permissions' || tabParam === 'modpacks') {
+    if (tabParam === 'help' || tabParam === 'customizer' || tabParam === 'marquee' || tabParam === 'permissions' || tabParam === 'modpacks' || tabParam === 'credits') {
       setActiveTab(tabParam as any);
     }
   }, [searchParams, modpacks]);
@@ -315,9 +452,9 @@ export const AdminPage: React.FC = () => {
       },
       {
         id: 'item-4',
-        label: 'Client Build Mirror',
-        status: 'Google Drive Direct Sync Ready',
-        tag: 'MIRROR',
+        label: 'Client Build Distribution',
+        status: 'Direct Client Download Ready',
+        tag: 'DIRECT',
         color: 'cyan',
         link: '/catalog'
       },
@@ -348,9 +485,12 @@ export const AdminPage: React.FC = () => {
     setFormLore('');
     setFormThumbnail('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80');
     setFormBanner('');
-    setFormMirror('https://drive.google.com');
+    setFormMirror('');
     setFormLifecycle('RELEASE');
     setFormPolicy('OPEN_DOWNLOAD');
+    setFormReleaseDate(new Date().toISOString().split('T')[0]);
+    setFormTrailerUrl('');
+    setFormTrailerTitle('');
     setFormMcVersion('1.20.1');
     setFormLoader('Fabric 0.16.5');
     setFormJava('Java 21 LTS');
@@ -377,7 +517,10 @@ export const AdminPage: React.FC = () => {
     setFormBanner(pack.bannerUrl || '');
     setFormMirror(pack.downloadMirror || '');
     setFormLifecycle(pack.lifecycle);
-    setFormPolicy(pack.accessPolicy);
+    setFormPolicy(pack.lifecycle === 'CLOSED_DEMO' ? 'NEED_PERMISSION' : pack.accessPolicy);
+    setFormReleaseDate(pack.releaseDate || '');
+    setFormTrailerUrl(pack.trailerUrl || '');
+    setFormTrailerTitle(pack.trailerTitle || '');
     setFormMcVersion(pack.specs.minecraftVersion);
     setFormLoader(pack.specs.modLoader);
     setFormJava(pack.specs.javaRuntime);
@@ -416,6 +559,8 @@ export const AdminPage: React.FC = () => {
       totalModsCount: Number(formModsCount) || 240,
     };
 
+    const effectivePolicy = formLifecycle === 'CLOSED_DEMO' ? 'NEED_PERMISSION' : formPolicy;
+
     if (editingPack) {
       const updateDTO: UpdateModpackDTO = {
         title: formTitle,
@@ -426,7 +571,10 @@ export const AdminPage: React.FC = () => {
         bannerUrl: formBanner,
         downloadMirror: formMirror,
         lifecycle: formLifecycle,
-        accessPolicy: formPolicy,
+        accessPolicy: effectivePolicy,
+        releaseDate: formReleaseDate,
+        trailerUrl: formTrailerUrl,
+        trailerTitle: formTrailerTitle,
         specs: specsPayload,
         changelog: formChangelog,
         screenshots: parsedScreenshots,
@@ -446,7 +594,10 @@ export const AdminPage: React.FC = () => {
         bannerUrl: formBanner,
         downloadMirror: formMirror,
         lifecycle: formLifecycle,
-        accessPolicy: formPolicy,
+        accessPolicy: effectivePolicy,
+        releaseDate: formReleaseDate,
+        trailerUrl: formTrailerUrl,
+        trailerTitle: formTrailerTitle,
         specs: specsPayload,
         changelog: formChangelog,
         screenshots: parsedScreenshots,
@@ -457,6 +608,65 @@ export const AdminPage: React.FC = () => {
         closeForm();
       }
     }
+  };
+
+  // FAQ Manager Handlers
+  const handleAddOrUpdateFaq = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draftFaqQuestion.trim() || !draftFaqAnswer.trim()) return;
+    sound.playSuccess();
+
+    if (editingFaqId) {
+      setCustomFaqs(prev => prev.map(f => f.id === editingFaqId ? {
+        ...f,
+        question: draftFaqQuestion.trim(),
+        answer: draftFaqAnswer.trim(),
+        category: draftFaqCategory.trim() || 'General'
+      } : f));
+      setEditingFaqId(null);
+    } else {
+      const newFaq: FAQItem = {
+        id: `faq-${Date.now()}`,
+        question: draftFaqQuestion.trim(),
+        answer: draftFaqAnswer.trim(),
+        category: draftFaqCategory.trim() || 'General'
+      };
+      setCustomFaqs(prev => [...prev, newFaq]);
+    }
+
+    setDraftFaqQuestion('');
+    setDraftFaqAnswer('');
+  };
+
+  const handleEditFaq = (faq: FAQItem) => {
+    sound.playClick();
+    setEditingFaqId(faq.id);
+    setDraftFaqQuestion(faq.question);
+    setDraftFaqAnswer(faq.answer);
+    setDraftFaqCategory(faq.category || 'General');
+  };
+
+  const handleDeleteFaq = (id: string) => {
+    sound.playClick();
+    setCustomFaqs(prev => prev.filter(f => f.id !== id));
+    if (editingFaqId === id) {
+      setEditingFaqId(null);
+      setDraftFaqQuestion('');
+      setDraftFaqAnswer('');
+    }
+  };
+
+  const handleMoveFaq = (index: number, direction: 'up' | 'down') => {
+    sound.playSwitch();
+    setCustomFaqs(prev => {
+      const items = [...prev];
+      const target = direction === 'up' ? index - 1 : index + 1;
+      if (target < 0 || target >= items.length) return prev;
+      const tmp = items[index];
+      items[index] = items[target];
+      items[target] = tmp;
+      return items;
+    });
   };
 
   const handleSaveCustomizer = async () => {
@@ -481,6 +691,11 @@ export const AdminPage: React.FC = () => {
       helpImageUrl: customHelpImageUrl,
       helpContent: customHelpContent,
       helpContactEmail: customHelpContactEmail,
+      faqs: customFaqs,
+      creditsTitle: customCreditsTitle,
+      creditsSubtitle: customCreditsSubtitle,
+      creditsLastUpdated: customCreditsLastUpdated,
+      creditsContent: customCreditsContent,
       marqueeEnabled: customMarqueeEnabled,
       marqueeLabel: customMarqueeLabel,
       marqueePingText: customMarqueePing,
@@ -655,7 +870,22 @@ export const AdminPage: React.FC = () => {
           }`}
         >
           <LifeBuoy className="w-4 h-4 text-[#5865F2]" />
-          <span>Get Help Page Customizer</span>
+          <span>Get Help & FAQs</span>
+        </button>
+
+        <button
+          onClick={() => {
+            sound.playSwitch();
+            setActiveTab('credits');
+          }}
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'credits'
+              ? 'bg-zinc-900 text-white border border-white/15 font-bold shadow-lg'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-brand-light" />
+          <span>Credits Page Customizer</span>
         </button>
 
         <button
@@ -1430,11 +1660,163 @@ export const AdminPage: React.FC = () => {
               </div>
             </div>
 
+            {/* FAQ Manager */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center text-brand-light">
+                    <MessageCircleQuestion className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-sans font-bold text-white tracking-tight">
+                      Frequently Asked Questions (FAQ) Manager ({customFaqs.length} Items)
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Add, update, reorder, or delete questions displayed in the Help Page FAQ section.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveCustomizer}
+                  className="px-4 py-2 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-mono font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save All FAQs</span>
+                </button>
+              </div>
+
+              {/* Add/Edit FAQ Form */}
+              <form onSubmit={handleAddOrUpdateFaq} className="p-4 rounded-xl bg-black/50 border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-brand-light font-bold">
+                    {editingFaqId ? 'Edit Selected FAQ Item' : 'Add New FAQ Question & Answer'}
+                  </span>
+                  {editingFaqId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFaqId(null);
+                        setDraftFaqQuestion('');
+                        setDraftFaqAnswer('');
+                      }}
+                      className="text-xs font-mono text-zinc-400 hover:text-white"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Question</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. How much RAM should I allocate?"
+                      value={draftFaqQuestion}
+                      onChange={(e) => setDraftFaqQuestion(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-white/10 text-xs text-white focus:outline-none focus:border-brand font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Category</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Performance, Installation"
+                      value={draftFaqCategory}
+                      onChange={(e) => setDraftFaqCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-white/10 text-xs text-white focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 block mb-1">Answer</label>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Provide clear technical explanation..."
+                    value={draftFaqAnswer}
+                    onChange={(e) => setDraftFaqAnswer(e.target.value)}
+                    className="w-full p-3 rounded-lg bg-zinc-900 border border-white/10 text-xs text-zinc-200 font-sans leading-relaxed focus:outline-none focus:border-brand"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-brand-light" />
+                    <span>{editingFaqId ? 'Update FAQ Entry' : 'Add Question'}</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing FAQs List */}
+              <div className="space-y-2">
+                {customFaqs.map((faq, idx) => (
+                  <div 
+                    key={faq.id}
+                    className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/[0.06] flex items-start justify-between gap-4 hover:border-white/15 transition-all"
+                  >
+                    <div className="space-y-1 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-sans font-bold text-white">{faq.question}</span>
+                        {faq.category && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/60 text-zinc-400 border border-white/10">
+                            {faq.category}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">{faq.answer}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFaq(idx, 'up')}
+                        disabled={idx === 0}
+                        className="p-1 rounded bg-black border border-white/10 text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFaq(idx, 'down')}
+                        disabled={idx === customFaqs.length - 1}
+                        className="p-1 rounded bg-black border border-white/10 text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditFaq(faq)}
+                        className="p-1 rounded bg-black border border-white/10 text-amber-300 hover:bg-amber-500/20 cursor-pointer ml-1"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFaq(faq.id)}
+                        className="p-1 rounded bg-black border border-white/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Troubleshooting & Guide Content */}
             <div className="lg:col-span-2 p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-4">
               <h3 className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                <span>Custom Troubleshooting Guides & FAQ Content</span>
+                <span>Custom Troubleshooting Guide & Architecture Notes</span>
               </h3>
               <p className="text-[11px] text-zinc-400">
                 Write setup tips, common crash explanations, Java flags, or custom instructions. Markdown and line-breaks supported.
@@ -1445,6 +1827,130 @@ export const AdminPage: React.FC = () => {
                 onChange={(e) => setCustomHelpContent(e.target.value)}
                 placeholder="Enter custom troubleshooting instructions, FAQs, or steps..."
                 className="w-full p-3 rounded-lg bg-black border border-white/10 text-xs text-zinc-200 font-sans leading-relaxed focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* TAB: CREDITS PAGE CUSTOMIZER */}
+      {activeTab === 'credits' && (
+        <div className="space-y-8 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-sans font-bold text-white flex items-center gap-2">
+                <Award className="w-5 h-5 text-brand-light" />
+                <span>Credits & Attributions Page Customizer</span>
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Customize titles, dates, mod author recognitions, and community attributions displayed at /credits.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Link
+                to="/credits"
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-mono text-zinc-300 flex items-center gap-1.5 transition-colors"
+              >
+                <span>View Public /credits Page</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+
+              <button
+                onClick={handleSaveCustomizer}
+                className="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-mono font-bold flex items-center gap-2 transition-all shadow-xl hover:scale-[1.02] cursor-pointer"
+              >
+                {isSavedCustomizer ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Save className="w-4 h-4" />}
+                <span>{isSavedCustomizer ? 'Configuration Saved!' : 'Save Credits Settings'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Title & Metadata Settings */}
+            <div className="p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-4">
+              <h3 className="text-xs font-mono uppercase tracking-wider text-brand-light font-bold flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>Page Titles & Header Metadata</span>
+              </h3>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 block mb-1">Credits Page Title</label>
+                  <input
+                    type="text"
+                    value={customCreditsTitle}
+                    onChange={(e) => setCustomCreditsTitle(e.target.value)}
+                    placeholder="Credits & Acknowledgments"
+                    className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-brand font-sans font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 block mb-1">Subtitle / Mission Statement</label>
+                  <textarea
+                    rows={2}
+                    value={customCreditsSubtitle}
+                    onChange={(e) => setCustomCreditsSubtitle(e.target.value)}
+                    placeholder="Honoring the mod authors and community contributors..."
+                    className="w-full p-2.5 rounded-lg bg-black border border-white/10 text-xs text-zinc-200 focus:outline-none focus:border-brand font-sans leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 block mb-1">Last Updated String</label>
+                  <input
+                    type="text"
+                    value={customCreditsLastUpdated}
+                    onChange={(e) => setCustomCreditsLastUpdated(e.target.value)}
+                    placeholder="e.g. October 2026"
+                    className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Tips */}
+            <div className="p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Formatting Guidelines</span>
+                </h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Use markdown syntax in the text editor below:
+                </p>
+                <ul className="text-xs text-zinc-400 space-y-1 font-mono">
+                  <li><span className="text-white">### Header</span> for section titles</li>
+                  <li><span className="text-white">* **Bold Name** – Description</span> for author credits</li>
+                  <li><span className="text-white">---</span> for divider lines</li>
+                  <li><span className="text-white">*Italic text*</span> for disclaimer notes</li>
+                </ul>
+              </div>
+
+              <div className="p-3 rounded-xl bg-brand/10 border border-brand/20 text-[11px] text-brand-light font-mono">
+                Changes will take effect instantly across all visitor sessions.
+              </div>
+            </div>
+
+            {/* Main Credits Content Text Area */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Credits & Attributions Text Content</span>
+                </h3>
+                <span className="text-[10px] font-mono text-zinc-500">Live Markdown Editor</span>
+              </div>
+
+              <textarea
+                rows={14}
+                value={customCreditsContent}
+                onChange={(e) => setCustomCreditsContent(e.target.value)}
+                placeholder="Write credits and acknowledgments in text/markdown..."
+                className="w-full p-4 rounded-xl bg-black border border-white/10 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-brand"
               />
             </div>
 
@@ -1745,10 +2251,10 @@ export const AdminPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Policy, Lifecycle & Mirror */}
+              {/* Policy, Lifecycle, Release Date, Trailer & Download Link */}
               <div className="space-y-4 pt-4 border-t border-white/[0.08]">
                 <h4 className="text-xs font-mono uppercase tracking-wider text-indigo-400 font-bold">
-                  4. Lifecycle, Download Mirror & Access Policy
+                  4. Lifecycle, Release Date, Trailer & Direct Download Link
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1756,26 +2262,93 @@ export const AdminPage: React.FC = () => {
                     <label className="text-[11px] font-mono text-zinc-400 block mb-1">Lifecycle State</label>
                     <select
                       value={formLifecycle}
-                      onChange={(e) => setFormLifecycle(e.target.value as ModpackLifecycle)}
+                      onChange={(e) => {
+                        const val = e.target.value as ModpackLifecycle;
+                        setFormLifecycle(val);
+                        if (val === 'CLOSED_DEMO') {
+                          setFormPolicy('NEED_PERMISSION');
+                        }
+                      }}
                       className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
                     >
-                      <option value="TEASER">TEASER</option>
-                      <option value="UPCOMING">UPCOMING</option>
-                      <option value="BETA">BETA</option>
                       <option value="RELEASE">RELEASE</option>
+                      <option value="DEMO">DEMO</option>
+                      <option value="CLOSED_DEMO">CLOSED DEMO (Permission Only)</option>
+                      <option value="COMING_SOON">COMING SOON</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Access Policy</label>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">
+                      Access Policy {formLifecycle === 'CLOSED_DEMO' ? '(Locked: Permission Required)' : ''}
+                    </label>
                     <select
                       value={formPolicy}
                       onChange={(e) => setFormPolicy(e.target.value as AccessPolicy)}
-                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
+                      disabled={formLifecycle === 'CLOSED_DEMO'}
+                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none disabled:opacity-50"
                     >
                       <option value="OPEN_DOWNLOAD">OPEN_DOWNLOAD (Public)</option>
                       <option value="NEED_PERMISSION">NEED_PERMISSION (Requires Review)</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">
+                      {formLifecycle === 'COMING_SOON' ? 'Expected Release Date' : 'Official Release Date'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2026-11-15 or November 2026"
+                      value={formReleaseDate}
+                      onChange={(e) => setFormReleaseDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Cinematic Video Trailer Section */}
+                <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 font-bold">
+                    <Film className="w-3.5 h-3.5" />
+                    <span>Official Cinematic Trailer (YouTube / Video URL)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-mono text-zinc-400 block mb-1">Trailer Video URL</label>
+                      <input
+                        type="text"
+                        placeholder="https://www.youtube.com/watch?v=... or .mp4 URL"
+                        value={formTrailerUrl}
+                        onChange={(e) => setFormTrailerUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-mono text-zinc-400 block mb-1">Trailer Title</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Official Cinematic Reveal Trailer"
+                        value={formTrailerTitle}
+                        onChange={(e) => setFormTrailerTitle(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Direct Modpack Download Link URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={formMirror}
+                      onChange={(e) => setFormMirror(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none font-mono"
+                    />
                   </div>
 
                   <div>
@@ -1784,19 +2357,9 @@ export const AdminPage: React.FC = () => {
                       type="number"
                       value={formModsCount}
                       onChange={(e) => setFormModsCount(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
+                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none font-mono"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-mono text-zinc-400 block mb-1">Download Mirror URL (Google Drive, S3, etc.)</label>
-                  <input
-                    type="text"
-                    value={formMirror}
-                    onChange={(e) => setFormMirror(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
-                  />
                 </div>
 
                 <div>

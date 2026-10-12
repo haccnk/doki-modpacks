@@ -122,7 +122,7 @@ export const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
               className="w-full sm:w-auto px-7 py-3.5 rounded-xl text-xs font-semibold text-white bg-brand hover:bg-brand-hover transition-all shadow-inner-light shadow-brand/30 cursor-pointer flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
-              <span>Download Client Build (Google Drive)</span>
+              <span>Download Modpack Build</span>
               <ExternalLink className="w-3.5 h-3.5 text-white/80" />
             </MagneticButton>
 

@@ -6,8 +6,6 @@ import {
   Lock, 
   ExternalLink, 
   AlertTriangle, 
-  ShieldCheck, 
-  Layers, 
   Cpu, 
   HardDrive, 
   Terminal, 
@@ -19,13 +17,54 @@ import {
   Clock, 
   Edit3,
   ChevronRight,
-  Info
+  Calendar,
+  Film,
+  Play
 } from 'lucide-react';
 import { useDoki } from '../context/DokiContext';
 import { sound } from '../utils/sound';
 import { BorderBeam } from '../components/BorderBeam';
 import { PermissionRequestModal } from '../components/PermissionRequestModal';
-import { Modpack } from '../backend/types';
+import { Modpack, ModpackLifecycle } from '../backend/types';
+
+function parseTrailer(url?: string): { isEmbeddable: boolean; embedUrl: string; isVideoFile: boolean; rawUrl: string } {
+  if (!url || !url.trim()) return { isEmbeddable: false, embedUrl: '', isVideoFile: false, rawUrl: '' };
+  const trimmed = url.trim();
+
+  // YouTube URL matching
+  const ytMatch = trimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return {
+      isEmbeddable: true,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=0&rel=0`,
+      isVideoFile: false,
+      rawUrl: trimmed,
+    };
+  }
+
+  // Direct video file
+  if (/\.(mp4|webm|ogg)($|\?)/i.test(trimmed)) {
+    return {
+      isEmbeddable: true,
+      embedUrl: trimmed,
+      isVideoFile: true,
+      rawUrl: trimmed,
+    };
+  }
+
+  // Vimeo
+  const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)(?:$|\/|\?)/i);
+  if (vimeoMatch && vimeoMatch[3]) {
+    return {
+      isEmbeddable: true,
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[3]}`,
+      isVideoFile: false,
+      rawUrl: trimmed,
+    };
+  }
+
+  return { isEmbeddable: false, embedUrl: trimmed, isVideoFile: false, rawUrl: trimmed };
+}
 
 export const ModpackDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -33,7 +72,7 @@ export const ModpackDetailPage: React.FC = () => {
   const { modpacks, resolveDownload, isAdmin, isLoading } = useDoki();
   const [requestModalPack, setRequestModalPack] = useState<Modpack | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [activeTab, setActiveTab] = useState<'lore' | 'specs' | 'installation' | 'changelog'>('lore');
+  const [activeTab, setActiveTab] = useState<'lore' | 'trailer' | 'specs' | 'installation' | 'changelog'>('lore');
 
   const pack = modpacks.find((m) => m.slug === slug);
 
@@ -72,13 +111,18 @@ export const ModpackDetailPage: React.FC = () => {
 
   const handleDownload = async () => {
     sound.playClick();
+
+    if (pack.lifecycle === 'COMING_SOON') {
+      return;
+    }
+
     if (pack.isQuarantined && !isAdmin) {
       sound.playFault();
       alert(`⚠️ Downloads for '${pack.title}' have been temporarily halted by Doki under Emergency Quarantine.`);
       return;
     }
 
-    if (pack.accessPolicy === 'NEED_PERMISSION' && !isAdmin) {
+    if ((pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin) {
       setRequestModalPack(pack);
       return;
     }
@@ -96,19 +140,38 @@ export const ModpackDetailPage: React.FC = () => {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const getLifecycleBadge = (lifecycle: string) => {
+  const getLifecycleBadge = (lifecycle: ModpackLifecycle | string) => {
     switch (lifecycle) {
       case 'RELEASE':
-        return 'bg-brand/15 text-brand-light border-brand/30';
-      case 'BETA':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-      case 'UPCOMING':
-        return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
-      case 'TEASER':
+        return {
+          label: 'RELEASE',
+          style: 'bg-brand/15 text-brand-light border-brand/30',
+        };
+      case 'DEMO':
+        return {
+          label: 'DEMO',
+          style: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+        };
+      case 'CLOSED_DEMO':
+        return {
+          label: 'CLOSED DEMO • PERMISSION ONLY',
+          style: 'bg-purple-500/15 text-purple-300 border-purple-500/40',
+        };
+      case 'COMING_SOON':
+        return {
+          label: 'COMING SOON',
+          style: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+        };
       default:
-        return 'bg-zinc-800 text-zinc-400 border-white/10';
+        return {
+          label: lifecycle,
+          style: 'bg-zinc-800 text-zinc-300 border-white/10',
+        };
     }
   };
+
+  const badge = getLifecycleBadge(pack.lifecycle);
+  const trailerInfo = parseTrailer(pack.trailerUrl);
 
   return (
     <div className="pt-24 pb-28 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -184,25 +247,39 @@ export const ModpackDetailPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full border uppercase font-bold tracking-wider ${getLifecycleBadge(pack.lifecycle)}`}>
-                {pack.lifecycle}
+              <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full border uppercase font-bold tracking-wider ${badge.style}`}>
+                {badge.label}
               </span>
               <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full border flex items-center gap-1 ${
-                pack.accessPolicy === 'OPEN_DOWNLOAD'
+                pack.lifecycle === 'CLOSED_DEMO'
+                  ? 'bg-purple-900/30 text-purple-300 border-purple-500/30'
+                  : pack.accessPolicy === 'OPEN_DOWNLOAD'
                   ? 'bg-zinc-900 text-zinc-300 border-white/10'
                   : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
               }`}>
-                {pack.accessPolicy === 'OPEN_DOWNLOAD' ? <Package className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                <span>{pack.accessPolicy === 'OPEN_DOWNLOAD' ? 'Public Download' : 'Permission Required'}</span>
+                {pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION' ? <Lock className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                <span>
+                  {pack.lifecycle === 'CLOSED_DEMO' ? 'Permission Only' : pack.accessPolicy === 'OPEN_DOWNLOAD' ? 'Public Download' : 'Permission Required'}
+                </span>
               </span>
             </div>
           </div>
 
-          {/* Right: Title, Specs Bento & Download Callout */}
+          {/* Right: Title, Specs Bento & Exactly 1 Download Button */}
           <div className="lg:col-span-8 space-y-6">
             <div className="space-y-2">
-              <div className="text-[11px] font-mono uppercase tracking-wider text-brand-light font-bold">
-                Official Minecraft Adventure Build
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-brand-light font-bold">
+                  Official Minecraft Adventure Build
+                </span>
+                {pack.releaseDate && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-[11px] font-mono text-zinc-300">
+                    <Calendar className="w-3 h-3 text-brand-light" />
+                    <span>
+                      {pack.lifecycle === 'COMING_SOON' ? `Expected Release: ${pack.releaseDate}` : `Release Date: ${pack.releaseDate}`}
+                    </span>
+                  </span>
+                )}
               </div>
               <h1 className="text-3xl sm:text-4xl font-sans font-bold text-white tracking-tight">
                 {pack.title}
@@ -232,47 +309,127 @@ export const ModpackDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Download CTA Action */}
+            {/* EXACTLY ONE DOWNLOAD BUTTON */}
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
               <button
                 onClick={handleDownload}
-                disabled={pack.isQuarantined && !isAdmin}
-                className={`px-6 py-3.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl transition-all cursor-pointer ${
-                  pack.isQuarantined && !isAdmin
+                disabled={pack.lifecycle === 'COMING_SOON' || (pack.isQuarantined && !isAdmin)}
+                className={`px-6 py-3.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl transition-all ${
+                  pack.lifecycle === 'COMING_SOON'
+                    ? 'bg-zinc-800/90 text-amber-300 border border-amber-500/20 cursor-default'
+                    : pack.isQuarantined && !isAdmin
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5'
-                    : 'bg-brand hover:bg-brand-hover text-white hover:scale-[1.02]'
+                    : (pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin
+                    ? 'bg-purple-900/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/30 cursor-pointer'
+                    : 'bg-brand hover:bg-brand-hover text-white hover:scale-[1.02] cursor-pointer'
                 }`}
               >
-                {pack.accessPolicy === 'NEED_PERMISSION' && !isAdmin ? (
+                {pack.lifecycle === 'COMING_SOON' ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    <span>Coming Soon {pack.releaseDate ? `• ${pack.releaseDate}` : ''}</span>
+                  </>
+                ) : pack.isQuarantined && !isAdmin ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Downloads Halted (Emergency Quarantine)</span>
+                  </>
+                ) : (pack.lifecycle === 'CLOSED_DEMO' || pack.accessPolicy === 'NEED_PERMISSION') && !isAdmin ? (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>Request Permission Access</span>
+                    <span>Request Permission Access (Closed Demo)</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span>Download Official Client Build</span>
+                    <span>Download Modpack Build</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-white/80" />
                   </>
                 )}
               </button>
 
-              {pack.downloadMirror && (
-                <a
-                  href={pack.downloadMirror}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white text-xs font-mono flex items-center justify-center gap-2 transition-colors"
+              {trailerInfo.rawUrl && (
+                <button
+                  onClick={() => {
+                    sound.playSwitch();
+                    setActiveTab('trailer');
+                  }}
+                  className="px-4 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white text-xs font-mono flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Google Drive Mirror</span>
-                </a>
+                  <Play className="w-3.5 h-3.5 text-brand-light" />
+                  <span>Watch Trailer</span>
+                </button>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Nav Tabs: Lore, System Requirements, Installation, Changelog */}
+      {/* Cinematic Trailer Section (Prominently shown if trailerUrl is set) */}
+      {trailerInfo.rawUrl && (
+        <section className="rounded-3xl bg-zinc-950/80 border border-white/[0.08] p-6 sm:p-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center text-brand-light">
+                <Film className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-base font-sans font-bold text-white tracking-tight">
+                  {pack.trailerTitle || 'Official Cinematic Trailer'}
+                </h3>
+                <p className="text-xs text-zinc-400 font-mono">
+                  Official gameplay and storyline reveal
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={trailerInfo.rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-mono text-brand-light hover:text-white transition-colors self-start sm:self-auto"
+            >
+              <span>Open in New Tab</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl">
+            {trailerInfo.isEmbeddable && !trailerInfo.isVideoFile ? (
+              <iframe
+                src={trailerInfo.embedUrl}
+                title={pack.trailerTitle || 'Modpack Trailer'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            ) : trailerInfo.isVideoFile ? (
+              <video
+                src={trailerInfo.embedUrl}
+                controls
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
+                <Film className="w-12 h-12 text-zinc-600" />
+                <p className="text-xs text-zinc-400 max-w-sm">
+                  External trailer stream configured: <span className="font-mono text-zinc-300">{trailerInfo.rawUrl}</span>
+                </p>
+                <a
+                  href={trailerInfo.rawUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-lg bg-brand hover:bg-brand-hover text-white text-xs font-mono font-semibold"
+                >
+                  Launch External Video
+                </a>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Nav Tabs: Lore, Specs, Installation, Changelog */}
       <div className="space-y-8">
         <div className="flex items-center gap-2 border-b border-white/[0.08] pb-3 text-xs font-mono overflow-x-auto">
           <button
@@ -348,20 +505,20 @@ export const ModpackDetailPage: React.FC = () => {
                 &ldquo;{pack.lore}&rdquo;
               </blockquote>
               <p className="text-xs text-zinc-400 leading-relaxed pt-2">
-                Every survival mechanic in {pack.title} is designed around this narrative foundation. From mutated fauna to toxic atmospheric pockets, players must craft advanced filtration equipment, uncover forgotten research outposts, and synthesize the cure to reopen the portal to The End.
+                This modpack is crafted to immerse you in a dangerous, evolving sandbox. Every encounter demands preparation, resource conservation, and knowledge of the environment.
               </p>
             </div>
 
-            {/* Screenshots Strip if available */}
+            {/* Screenshots Gallery */}
             {pack.screenshots && pack.screenshots.length > 0 && (
               <div className="space-y-3">
-                <div className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-semibold">
-                  Field Recon // Screenshots
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-wider">
+                  In-Game Visual Transmissions ({pack.screenshots.length} Screenshots)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {pack.screenshots.map((shot, idx) => (
-                    <div key={idx} className="rounded-xl overflow-hidden border border-white/10 bg-zinc-900 group">
-                      <img src={shot} alt={`Screenshot ${idx + 1}`} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div key={idx} className="rounded-xl overflow-hidden border border-white/10 bg-zinc-900 h-56 sm:h-64 relative group">
+                      <img src={shot} alt={`Screenshot ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     </div>
                   ))}
                 </div>
@@ -372,135 +529,111 @@ export const ModpackDetailPage: React.FC = () => {
 
         {/* TAB 2: SYSTEM REQUIREMENTS */}
         {activeTab === 'specs' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Minimum Specs */}
-              <div className="p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-4">
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                  <h3 className="text-sm font-sans font-bold text-white">Minimum Requirements</h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-white/10">30-45 FPS Target</span>
-                </div>
-                <ul className="space-y-3 text-xs">
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Processor (CPU)</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.minCpu || 'Intel Core i5-8400 / Ryzen 5 2600'}</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Graphics (GPU)</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.minGpu || 'NVIDIA GTX 1060 / AMD RX 580 (4 GB)'}</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Allocated RAM</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.minRam}</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Java Runtime</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.javaRuntime}</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1">
-                    <span className="text-zinc-400">Storage Required</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.diskSpace || '12 GB Free SSD Space'}</span>
-                  </li>
-                </ul>
-              </div>
+          <div className="rounded-2xl bg-zinc-950/70 border border-white/[0.08] p-6 sm:p-8 space-y-6 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold">
+              <Cpu className="w-4 h-4" />
+              <span>Verified Hardware Specification</span>
+            </div>
 
-              {/* Recommended Specs */}
-              <div className="p-6 rounded-2xl bg-zinc-950/70 border border-brand/30 space-y-4 relative overflow-hidden">
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                  <h3 className="text-sm font-sans font-bold text-white flex items-center gap-2">
-                    <span>Recommended Experience</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand" />
-                  </h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand/10 text-brand-light border border-brand/30">60-120+ FPS Target</span>
-                </div>
-                <ul className="space-y-3 text-xs">
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Processor (CPU)</span>
-                    <span className="font-mono text-zinc-200">Intel Core i7-12700 / AMD Ryzen 7 5800X</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Graphics (GPU)</span>
-                    <span className="font-mono text-zinc-200">NVIDIA RTX 3060 / AMD RX 6700 XT (8 GB)</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Allocated RAM</span>
-                    <span className="font-mono text-emerald-400 font-bold">{pack.specs.recommendedRam}</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
-                    <span className="text-zinc-400">Java Runtime</span>
-                    <span className="font-mono text-zinc-200">{pack.specs.javaRuntime} (with ZGC/Generational Shenandoah)</span>
-                  </li>
-                  <li className="flex justify-between items-center py-1">
-                    <span className="text-zinc-400">Storage Required</span>
-                    <span className="font-mono text-zinc-200">NVMe High-Speed SSD</span>
-                  </li>
-                </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Minecraft Target</div>
+                <div className="text-zinc-200 font-semibold">{pack.specs.minecraftVersion}</div>
               </div>
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Mod Loader</div>
+                <div className="text-zinc-200 font-semibold">{pack.specs.modLoader}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Java Runtime</div>
+                <div className="text-zinc-200 font-semibold">{pack.specs.javaRuntime}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Memory Allocation (RAM)</div>
+                <div className="text-emerald-400 font-semibold">Min: {pack.specs.minRam} • Rec: {pack.specs.recommendedRam}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Processor (CPU)</div>
+                <div className="text-zinc-200 font-semibold">{pack.specs.minCpu || 'Quad-Core 3.2 GHz or higher'}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-1">
+                <div className="text-zinc-500 text-[10px] uppercase">Graphics (GPU)</div>
+                <div className="text-zinc-200 font-semibold">{pack.specs.minGpu || 'NVIDIA GTX 1060 / AMD RX 580 (4GB+)'}</div>
+              </div>
+            </div>
 
+            <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs flex items-center gap-3">
+              <HardDrive className="w-5 h-5 shrink-0 text-cyan-400" />
+              <span>Recommended SSD Space: {pack.specs.diskSpace || '8 GB NVMe/SSD space for world generation caching.'}</span>
             </div>
           </div>
         )}
 
         {/* TAB 3: INSTALLATION GUIDE */}
         {activeTab === 'installation' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-6">
-              <h3 className="text-sm font-sans font-bold text-white">How to Install {pack.title}</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-2">
-                  <div className="w-7 h-7 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center text-brand-light font-mono text-xs font-bold">1</div>
-                  <h4 className="text-xs font-semibold text-white">Download Build Package</h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Download the official archive zip file from the Google Drive mirror above.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-2">
-                  <div className="w-7 h-7 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center text-brand-light font-mono text-xs font-bold">2</div>
-                  <h4 className="text-xs font-semibold text-white">Import into Launcher</h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Open Prism Launcher, Modrinth App, or CurseForge, and select &quot;Import from Zip / Add Instance&quot;.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-2">
-                  <div className="w-7 h-7 rounded-lg bg-brand/10 border border-brand/30 flex items-center justify-center text-brand-light font-mono text-xs font-bold">3</div>
-                  <h4 className="text-xs font-semibold text-white">Configure Java & Launch</h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Allocate at least {pack.specs.minRam} (recommended: {pack.specs.recommendedRam}) in Instance Settings and launch!
-                  </p>
-                </div>
-              </div>
+          <div className="rounded-2xl bg-zinc-950/70 border border-white/[0.08] p-6 sm:p-8 space-y-6 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">
+              <Terminal className="w-4 h-4" />
+              <span>Deployment & Launcher Setup</span>
             </div>
+
+            <ol className="space-y-4 text-xs font-sans text-zinc-300">
+              <li className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/[0.04]">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light font-mono text-xs flex items-center justify-center shrink-0">1</span>
+                <div>
+                  <span className="font-semibold text-white block">Download Modpack Client Archive</span>
+                  Download the official archive zip file from the download button above.
+                </div>
+              </li>
+              <li className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/[0.04]">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light font-mono text-xs flex items-center justify-center shrink-0">2</span>
+                <div>
+                  <span className="font-semibold text-white block">Import into Prism, Modrinth, or CurseForge</span>
+                  Open your custom Minecraft launcher, select &quot;Add Instance&quot; or &quot;Import from Zip&quot;, and select the downloaded archive.
+                </div>
+              </li>
+              <li className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/[0.04]">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light font-mono text-xs flex items-center justify-center shrink-0">3</span>
+                <div>
+                  <span className="font-semibold text-white block">Configure Java Runtime & RAM</span>
+                  Verify that your instance is pointing to <span className="font-mono text-brand-light">{pack.specs.javaRuntime}</span> and has at least <span className="font-mono text-brand-light">{pack.specs.recommendedRam}</span> assigned.
+                </div>
+              </li>
+              <li className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/[0.04]">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light font-mono text-xs flex items-center justify-center shrink-0">4</span>
+                <div>
+                  <span className="font-semibold text-white block">Launch & Connect</span>
+                  Start the instance. If you encounter any crash or memory exhaustion, refer to our Community Help Center on Discord or Facebook.
+                </div>
+              </li>
+            </ol>
           </div>
         )}
 
         {/* TAB 4: CHANGELOG */}
         {activeTab === 'changelog' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="p-6 rounded-2xl bg-zinc-950/70 border border-white/[0.08] space-y-3">
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                <span className="text-xs font-mono uppercase text-brand-light font-bold">Build Version History</span>
-                <span className="text-[10px] font-mono text-zinc-500">Updated: {new Date(pack.updatedAt).toLocaleDateString()}</span>
-              </div>
-              <div className="text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">
-                {pack.changelog || `v1.0.0-PROD (Initial Stable Release):\n- Integrated 240+ Fabric optimization and survival mods.\n- Custom Iris Shaders profile with high-framerate occlusion culling.\n- Custom biohazard mutation mechanics and toxic biome radiation filters.\n- Verified multiplayer server parity and zero tick-lag drop.`}
-              </div>
+          <div className="rounded-2xl bg-zinc-950/70 border border-white/[0.08] p-6 sm:p-8 space-y-4 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-indigo-400 font-bold">
+              <FileText className="w-4 h-4" />
+              <span>Version History & Notes</span>
             </div>
+
+            <pre className="p-4 rounded-xl bg-black border border-white/10 font-mono text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed overflow-x-auto">
+              {pack.changelog || 'No detailed changelog provided for this release version.'}
+            </pre>
           </div>
         )}
-
       </div>
 
-      {/* Permission Request Modal for restricted packs */}
-      <PermissionRequestModal
-        isOpen={!!requestModalPack}
-        modpackId={requestModalPack?.id || ''}
-        modpackTitle={requestModalPack?.title || ''}
-        onClose={() => setRequestModalPack(null)}
-      />
+      {/* Permission Request Modal */}
+      {requestModalPack && (
+        <PermissionRequestModal
+          isOpen={true}
+          onClose={() => setRequestModalPack(null)}
+          modpackId={requestModalPack.id}
+          modpackTitle={requestModalPack.title}
+        />
+      )}
     </div>
   );
 };

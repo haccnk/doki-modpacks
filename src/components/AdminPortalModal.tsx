@@ -51,7 +51,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
   const [newDesc, setNewDesc] = useState('');
   const [newLore, setNewLore] = useState('');
   const [newMirror, setNewMirror] = useState('');
-  const [newLifecycle, setNewLifecycle] = useState<ModpackLifecycle>('BETA');
+  const [newLifecycle, setNewLifecycle] = useState<ModpackLifecycle>('RELEASE');
   const [newPolicy, setNewPolicy] = useState<AccessPolicy>('OPEN_DOWNLOAD');
 
   if (!isOpen || !isAdmin) return null;
@@ -237,19 +237,26 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <select
                       value={newLifecycle}
-                      onChange={(e) => setNewLifecycle(e.target.value as ModpackLifecycle)}
+                      onChange={(e) => {
+                        const val = e.target.value as ModpackLifecycle;
+                        setNewLifecycle(val);
+                        if (val === 'CLOSED_DEMO') {
+                          setNewPolicy('NEED_PERMISSION');
+                        }
+                      }}
                       className="px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
                     >
-                      <option value="TEASER">TEASER</option>
-                      <option value="UPCOMING">UPCOMING</option>
-                      <option value="BETA">BETA</option>
                       <option value="RELEASE">RELEASE</option>
+                      <option value="DEMO">DEMO</option>
+                      <option value="CLOSED_DEMO">CLOSED DEMO (Permission Only)</option>
+                      <option value="COMING_SOON">COMING SOON</option>
                     </select>
 
                     <select
                       value={newPolicy}
                       onChange={(e) => setNewPolicy(e.target.value as AccessPolicy)}
-                      className="px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none"
+                      disabled={newLifecycle === 'CLOSED_DEMO'}
+                      className="px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none disabled:opacity-50"
                     >
                       <option value="OPEN_DOWNLOAD">OPEN_DOWNLOAD</option>
                       <option value="NEED_PERMISSION">NEED_PERMISSION</option>
@@ -257,7 +264,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
 
                     <input
                       type="text"
-                      placeholder="Download Mirror URL"
+                      placeholder="Download URL"
                       value={newMirror}
                       onChange={(e) => setNewMirror(e.target.value)}
                       className="px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white placeholder:text-zinc-600 focus:outline-none"
@@ -298,13 +305,19 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
                       {/* Lifecycle Selector */}
                       <select
                         value={pack.lifecycle}
-                        onChange={(e) => updateModpack(pack.id, { lifecycle: e.target.value as ModpackLifecycle })}
+                        onChange={(e) => {
+                          const val = e.target.value as ModpackLifecycle;
+                          updateModpack(pack.id, { 
+                            lifecycle: val,
+                            ...(val === 'CLOSED_DEMO' ? { accessPolicy: 'NEED_PERMISSION' } : {})
+                          });
+                        }}
                         className="px-2.5 py-1 rounded bg-black border border-white/10 text-xs font-mono text-zinc-300 focus:outline-none"
                       >
-                        <option value="TEASER">TEASER</option>
-                        <option value="UPCOMING">UPCOMING</option>
-                        <option value="BETA">BETA</option>
                         <option value="RELEASE">RELEASE</option>
+                        <option value="DEMO">DEMO</option>
+                        <option value="CLOSED_DEMO">CLOSED DEMO</option>
+                        <option value="COMING_SOON">COMING SOON</option>
                       </select>
 
                       {/* Policy Selector */}

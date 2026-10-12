@@ -211,8 +211,15 @@ export class ModpackService {
       return modpacks;
     }
 
-    // Public / Regular users only see published lifecycles
-    return modpacks.filter(m => m.lifecycle === 'RELEASE' || m.lifecycle === 'BETA' || m.lifecycle === 'UPCOMING');
+    // Public / Regular users see all catalog entries: RELEASE, DEMO, CLOSED_DEMO, COMING_SOON
+    return modpacks.filter(m => 
+      m.lifecycle === 'RELEASE' || 
+      m.lifecycle === 'DEMO' || 
+      m.lifecycle === 'CLOSED_DEMO' || 
+      m.lifecycle === 'COMING_SOON' ||
+      (m.lifecycle as any) === 'BETA' ||
+      (m.lifecycle as any) === 'UPCOMING'
+    );
   }
 
   public static async getBySlug(slug: string): Promise<Modpack> {
@@ -235,6 +242,9 @@ export class ModpackService {
       throw new AccessDeniedError(`A modpack with slug '${dto.slug}' already exists.`, 'DUPLICATE_SLUG', 409);
     }
 
+    // Auto-enforce permission requirement for CLOSED_DEMO
+    const effectivePolicy = dto.lifecycle === 'CLOSED_DEMO' ? 'NEED_PERMISSION' : dto.accessPolicy;
+
     const newModpack: Modpack = {
       id: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: dto.title,
@@ -242,8 +252,11 @@ export class ModpackService {
       description: dto.description,
       lore: dto.lore,
       lifecycle: dto.lifecycle,
-      accessPolicy: dto.accessPolicy,
+      accessPolicy: effectivePolicy,
       isQuarantined: false,
+      releaseDate: dto.releaseDate,
+      trailerUrl: dto.trailerUrl,
+      trailerTitle: dto.trailerTitle,
       downloadMirror: dto.downloadMirror,
       bannerUrl: dto.bannerUrl || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200',
       thumbnailUrl: dto.thumbnailUrl || dto.bannerUrl || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=600',
@@ -271,15 +284,25 @@ export class ModpackService {
       throw new AccessDeniedError(`Modpack with id '${id}' not found.`, 'MODPACK_NOT_FOUND', 404);
     }
 
+    const nextLifecycle = dto.lifecycle ?? modpack.lifecycle;
+    let nextPolicy = dto.accessPolicy ?? modpack.accessPolicy;
+    // Auto-enforce permission requirement for CLOSED_DEMO
+    if (nextLifecycle === 'CLOSED_DEMO') {
+      nextPolicy = 'NEED_PERMISSION';
+    }
+
     const updated: Modpack = {
       ...modpack,
       title: dto.title ?? modpack.title,
       slug: dto.slug ?? modpack.slug,
       description: dto.description ?? modpack.description,
       lore: dto.lore ?? modpack.lore,
-      lifecycle: dto.lifecycle ?? modpack.lifecycle,
-      accessPolicy: dto.accessPolicy ?? modpack.accessPolicy,
+      lifecycle: nextLifecycle,
+      accessPolicy: nextPolicy,
       isQuarantined: dto.isQuarantined ?? modpack.isQuarantined,
+      releaseDate: dto.releaseDate !== undefined ? dto.releaseDate : modpack.releaseDate,
+      trailerUrl: dto.trailerUrl !== undefined ? dto.trailerUrl : modpack.trailerUrl,
+      trailerTitle: dto.trailerTitle !== undefined ? dto.trailerTitle : modpack.trailerTitle,
       downloadMirror: dto.downloadMirror ?? modpack.downloadMirror,
       bannerUrl: dto.bannerUrl ?? modpack.bannerUrl,
       thumbnailUrl: dto.thumbnailUrl ?? modpack.thumbnailUrl,

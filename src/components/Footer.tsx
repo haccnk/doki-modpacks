@@ -57,6 +57,7 @@ export const Footer: React.FC = () => {
               <li><Link to="/modpack/minecraft-2-biohazard" className="hover:text-white transition-colors">Minecraft 2: Biohazard</Link></li>
               <li><Link to="/catalog" className="hover:text-white transition-colors">Modpack Catalog</Link></li>
               <li><Link to="/about" className="hover:text-white transition-colors">About Doki&apos;s Mission</Link></li>
+              <li><Link to="/credits" className="hover:text-white transition-colors">Credits & Attributions</Link></li>
               <li><Link to="/engineering" className="hover:text-white transition-colors">Engineering Suite</Link></li>
               <li><Link to="/help" className="hover:text-white transition-colors">Community Help & Discord</Link></li>
             </ul>

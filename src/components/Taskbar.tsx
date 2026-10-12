@@ -74,6 +74,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     { id: 'catalog', label: 'Catalog', path: '/catalog', icon: Package, shortcut: 'C' },
     { id: 'about', label: 'About & Lore', path: '/about', icon: BookOpen, shortcut: 'A' },
     { id: 'help', label: 'Get Help', path: '/help', icon: LifeBuoy, shortcut: 'G' },
+    { id: 'credits', label: 'Credits', path: '/credits', icon: Sparkles, shortcut: 'R' },
     { id: 'engineering', label: 'Engineering', path: '/engineering', icon: Cpu, shortcut: 'E' },
     { id: 'admin', label: 'Admin Hub', path: '/admin', icon: ShieldCheck, shortcut: 'D', adminOnly: false },
   ];
