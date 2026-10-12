@@ -34,7 +34,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
   const [isMuted, setIsMuted] = useState(sound.getIsMuted());
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
-  if (isEditingModpack) {
+  if (isEditingModpack || location.pathname.startsWith('/admin')) {
     return null;
   }
 
@@ -70,13 +70,13 @@ export const Taskbar: React.FC<TaskbarProps> = ({
   };
 
   const navItems = [
-    { id: 'home', label: 'Home', path: '/', icon: Home, shortcut: 'H' },
-    { id: 'catalog', label: 'Catalog', path: '/catalog', icon: Package, shortcut: 'C' },
-    { id: 'about', label: 'About & Lore', path: '/about', icon: BookOpen, shortcut: 'A' },
-    { id: 'help', label: 'Get Help', path: '/help', icon: LifeBuoy, shortcut: 'G' },
-    { id: 'credits', label: 'Credits', path: '/credits', icon: Sparkles, shortcut: 'R' },
-    { id: 'engineering', label: 'Engineering', path: '/engineering', icon: Cpu, shortcut: 'E' },
-    { id: 'admin', label: 'Admin Hub', path: '/admin', icon: ShieldCheck, shortcut: 'D', adminOnly: false },
+    { id: 'home', label: 'Home', shortLabel: 'Home', path: '/', icon: Home, shortcut: 'H' },
+    { id: 'catalog', label: 'Catalog', shortLabel: 'Catalog', path: '/catalog', icon: Package, shortcut: 'C' },
+    { id: 'about', label: 'About & Lore', shortLabel: 'About', path: '/about', icon: BookOpen, shortcut: 'A' },
+    { id: 'help', label: 'Get Help', shortLabel: 'Help', path: '/help', icon: LifeBuoy, shortcut: 'G' },
+    { id: 'credits', label: 'Credits', shortLabel: 'Credits', path: '/credits', icon: Sparkles, shortcut: 'R' },
+    { id: 'engineering', label: 'Engineering', shortLabel: 'Tech', path: '/engineering', icon: Cpu, shortcut: 'E' },
+    { id: 'admin', label: 'Admin Hub', shortLabel: 'Admin', path: '/admin', icon: ShieldCheck, shortcut: 'D', adminOnly: true },
   ];
 
   return (
@@ -110,17 +110,21 @@ export const Taskbar: React.FC<TaskbarProps> = ({
               onClick={() => sound.playClick()}
               onMouseEnter={() => setHoveredTab(`${item.label} (${item.shortcut})`)}
               onMouseLeave={() => setHoveredTab(null)}
-              className={`liquid-glass-item flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-medium cursor-pointer ${
+              className={`liquid-glass-item flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-medium cursor-pointer transition-all duration-200 ${
                 isActive
-                  ? 'liquid-glass-active font-semibold'
+                  ? 'liquid-glass-active font-semibold shadow-lg shadow-brand/10'
                   : item.id === 'admin' && isAdmin
                   ? 'text-amber-400 hover:text-amber-200 border border-amber-500/30 bg-amber-500/10'
                   : 'text-zinc-300 hover:text-white border border-transparent'
               }`}
               aria-label={item.label}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.id === 'admin' ? 'text-amber-400' : 'text-zinc-300'}`} />
-              <span className="hidden sm:inline-block font-sans text-xs">{item.label}</span>
+              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : item.id === 'admin' ? 'text-amber-400' : 'text-zinc-300'}`} />
+              <span className={`font-sans text-xs whitespace-nowrap transition-all duration-200 ${
+                isActive ? 'inline-block text-white font-semibold' : 'hidden md:inline-block text-zinc-300'
+              }`}>
+                {item.shortLabel}
+              </span>
 
               {/* Pulsing Liquid Dot */}
               {isActive && (

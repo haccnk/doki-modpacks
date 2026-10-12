@@ -66,10 +66,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           <div className="flex items-center gap-2 sm:gap-3">
             {isAdmin ? (
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] font-mono font-bold text-amber-300">
+                <Link
+                  to="/admin"
+                  onClick={() => sound.playClick()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] font-mono font-bold text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
+                  title="Open Admin Hub"
+                >
                   <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
                   <span>doki (ADMIN)</span>
-                </span>
+                </Link>
 
                 <button
                   onClick={() => {

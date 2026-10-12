@@ -36,7 +36,12 @@ import {
   Calendar,
   MessageCircleQuestion,
   Award,
-  Disc as Discord
+  Disc as Discord,
+  Database,
+  Cloud,
+  UploadCloud,
+  DownloadCloud,
+  Copy
 } from 'lucide-react';
 import { useDoki } from '../context/DokiContext';
 import { Modpack, ModpackLifecycle, AccessPolicy, CreateModpackDTO, UpdateModpackDTO, MarqueeItem, FAQItem } from '../backend/types';
@@ -57,11 +62,15 @@ export const AdminPage: React.FC = () => {
     toggleEmergencyQuarantine, 
     moderateRequest, 
     updatePlatformConfig,
-    setIsEditingModpack
+    setIsEditingModpack,
+    syncToCloud,
+    testCloudConnection,
+    saveCloudConfig,
+    getCloudConfig
   } = useDoki();
 
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'modpacks' | 'customizer' | 'marquee' | 'help' | 'permissions' | 'credits'>('modpacks');
+  const [activeTab, setActiveTab] = useState<'modpacks' | 'customizer' | 'marquee' | 'help' | 'permissions' | 'credits' | 'database'>('modpacks');
 
   // Modpack Edit Modal State
   const [editingPack, setEditingPack] = useState<Modpack | null>(null);
@@ -78,6 +87,23 @@ export const AdminPage: React.FC = () => {
   // Login form if not admin
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+
+  // Cloud Database (Supabase / Vercel Sync) State
+  const [cloudUrl, setCloudUrl] = useState('');
+  const [cloudKey, setCloudKey] = useState('');
+  const [isTestingCloud, setIsTestingCloud] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; tableMissing?: boolean } | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [copiedSeed, setCopiedSeed] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  useEffect(() => {
+    const cfg = getCloudConfig();
+    if (cfg) {
+      setCloudUrl(cfg.url);
+      setCloudKey(cfg.anonKey);
+    }
+  }, [getCloudConfig]);
 
   // Modpack Form Fields
   const [formTitle, setFormTitle] = useState('');
@@ -707,6 +733,89 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
     }
   };
 
+  // Cloud Database Handlers
+  const handleTestCloudConnection = async () => {
+    sound.playClick();
+    setIsTestingCloud(true);
+    setTestResult(null);
+    const res = await testCloudConnection({ url: cloudUrl, anonKey: cloudKey });
+    setIsTestingCloud(false);
+    setTestResult(res);
+    if (res.success) {
+      sound.playSuccess();
+    } else {
+      sound.playFault();
+    }
+  };
+
+  const handleSaveCloud = () => {
+    sound.playClick();
+    saveCloudConfig(cloudUrl, cloudKey);
+    setTestResult({ success: true, message: 'Cloud configuration saved and active!' });
+    sound.playSuccess();
+  };
+
+  const handleDisconnectCloud = () => {
+    sound.playClick();
+    saveCloudConfig('', '');
+    setCloudUrl('');
+    setCloudKey('');
+    setTestResult(null);
+  };
+
+  const handleSyncToCloudNow = async () => {
+    sound.playClick();
+    setIsSyncingCloud(true);
+    await syncToCloud();
+    setIsSyncingCloud(false);
+  };
+
+  const handleCopySeed = () => {
+    sound.playClick();
+    const seedExport = {
+      exportedAt: new Date().toISOString(),
+      modpacks,
+      platformConfig
+    };
+    navigator.clipboard.writeText(JSON.stringify(seedExport, null, 2));
+    setCopiedSeed(true);
+    setTimeout(() => setCopiedSeed(false), 2500);
+  };
+
+  const handleDownloadSeed = () => {
+    sound.playClick();
+    const seedExport = {
+      exportedAt: new Date().toISOString(),
+      modpacks,
+      platformConfig
+    };
+    const blob = new Blob([JSON.stringify(seedExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `doki-modpacks-hub-seed-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const sqlSetupSnippet = `-- Supabase Table Setup for Doki's Modpacks Hub
+create table if not exists app_storage (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Enable RLS and public read/write access for anonymous client
+alter table app_storage enable row level security;
+create policy "Public Access" on app_storage for all using (true);`;
+
+  const handleCopySql = () => {
+    sound.playClick();
+    navigator.clipboard.writeText(sqlSetupSnippet);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
+  };
+
   // If not logged in as Admin, show Root Authentication Prompt
   if (!isAdmin) {
     return (
@@ -901,6 +1010,21 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
         >
           <Lock className="w-4 h-4 text-indigo-400" />
           <span>Access Requests ({pendingRequests.filter(r => r.status === 'PENDING').length})</span>
+        </button>
+
+        <button
+          onClick={() => {
+            sound.playSwitch();
+            setActiveTab('database');
+          }}
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'database'
+              ? 'bg-zinc-900 text-white border border-white/15 font-bold shadow-lg'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
+          }`}
+        >
+          <Database className="w-4 h-4 text-cyan-400" />
+          <span>Cloud Database (Vercel Sync)</span>
         </button>
       </div>
 
@@ -2019,6 +2143,262 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
           )}
         </div>
       )}
+
+      {/* TAB: CLOUD DATABASE & VERCEL SYNC */}
+      {activeTab === 'database' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          
+          {/* Header Card: Status & Architecture */}
+          <div className="p-6 rounded-3xl bg-zinc-950/70 border border-white/[0.08] shadow-2xl relative overflow-hidden space-y-4">
+            <BorderBeam size={200} duration={14} />
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-2xl border ${
+                  cloudUrl && cloudKey 
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                }`}>
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-sans font-bold text-white flex items-center gap-2">
+                    <span>Cloud Database & Global Sync</span>
+                    <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-bold uppercase tracking-wider ${
+                      cloudUrl && cloudKey
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {cloudUrl && cloudKey ? '● Supabase Cloud Active' : '● Local Browser Sandbox (IndexedDB)'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Synchronize your custom modpacks, cover thumbnails, FAQs, and credits across all visitors on Vercel worldwide.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Sync Button */}
+              {cloudUrl && cloudKey && (
+                <button
+                  type="button"
+                  onClick={handleSyncToCloudNow}
+                  disabled={isSyncingCloud}
+                  className="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-xl hover:scale-[1.02] cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
+                >
+                  <UploadCloud className={`w-4 h-4 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
+                  <span>{isSyncingCloud ? 'Syncing to Cloud...' : 'Push Local Edits to Cloud'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Architecture Explanation Banner */}
+            <div className={`p-4 rounded-2xl border text-xs leading-relaxed ${
+              cloudUrl && cloudKey
+                ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-200'
+                : 'bg-amber-950/20 border-amber-500/20 text-amber-200'
+            }`}>
+              {cloudUrl && cloudKey ? (
+                <p>
+                  <strong>Global Synchronization Enabled:</strong> Any change you save in this admin panel is automatically written to your Supabase cloud database. All users and devices visiting your Vercel deployment will immediately see the updated thumbnails, modpacks, and content without needing a redeploy!
+                </p>
+              ) : (
+                <p>
+                  <strong>Why others can't see your changes yet:</strong> Edits and thumbnail uploads are currently stored in your browser's private local storage (IndexedDB). Since Vercel serves a static frontend without a default database, other users and browsers cannot see your local changes until you connect a free Supabase cloud database below, or export your data into the site seed!
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Cloud Database Credentials Configuration */}
+          <div className="p-6 rounded-3xl bg-zinc-950/70 border border-white/[0.08] shadow-2xl space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-sans font-bold text-white">
+                  Supabase Cloud Connection Settings
+                </h4>
+                <p className="text-xs text-zinc-400">
+                  Connect your free Supabase project to enable permanent, real-time shared storage across all visitors.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-mono text-zinc-400 block mb-1">
+                  Supabase Project URL *
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://your-project-id.supabase.co"
+                  value={cloudUrl}
+                  onChange={(e) => setCloudUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-brand font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-zinc-400 block mb-1">
+                  Supabase Public Anon API Key *
+                </label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={cloudKey}
+                  onChange={(e) => setCloudKey(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-brand font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Test Connection Diagnostic Output */}
+            {testResult && (
+              <div className={`p-4 rounded-2xl border text-xs font-mono space-y-2 ${
+                testResult.success 
+                  ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+                  : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+              }`}>
+                <div className="flex items-center gap-2 font-bold">
+                  {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-rose-400" />}
+                  <span>{testResult.message}</span>
+                </div>
+                {testResult.tableMissing && (
+                  <p className="text-[11px] text-zinc-300 font-sans">
+                    Please copy the SQL snippet below, go to your Supabase Dashboard &gt; SQL Editor, paste it and click Run to create the required table.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleTestCloudConnection}
+                disabled={isTestingCloud || !cloudUrl || !cloudKey}
+                className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-mono transition-colors cursor-pointer border border-white/10 flex items-center gap-2 disabled:opacity-40"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingCloud ? 'animate-spin' : ''}`} />
+                <span>{isTestingCloud ? 'Testing Connection...' : 'Test Connection'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveCloud}
+                disabled={!cloudUrl || !cloudKey}
+                className="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-mono font-bold transition-all shadow-lg cursor-pointer flex items-center gap-2 disabled:opacity-40"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save & Activate Cloud Sync</span>
+              </button>
+
+              {cloudUrl && (
+                <button
+                  type="button"
+                  onClick={handleDisconnectCloud}
+                  className="px-4 py-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 text-xs font-mono transition-colors cursor-pointer border border-rose-500/20"
+                >
+                  Disconnect Cloud
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 60-Second Setup Guide */}
+          <div className="p-6 rounded-3xl bg-zinc-950/70 border border-white/[0.08] shadow-2xl space-y-5">
+            <h4 className="text-sm font-sans font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-brand-light" />
+              <span>Free 60-Second Supabase Setup (Step-by-Step)</span>
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+              <div className="p-4 rounded-2xl bg-black/60 border border-white/5 space-y-2">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light border border-brand/30 flex items-center justify-center font-bold text-[11px]">1</span>
+                <p className="font-bold text-white font-sans">Create Free Project</p>
+                <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+                  Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-brand-light underline">supabase.com</a>, create a free project (100% free forever, no credit card required).
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black/60 border border-white/5 space-y-2">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light border border-brand/30 flex items-center justify-center font-bold text-[11px]">2</span>
+                <p className="font-bold text-white font-sans">Run SQL Schema</p>
+                <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+                  Open the <strong>SQL Editor</strong> in Supabase, paste the SQL snippet below, and click <strong>Run</strong>.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black/60 border border-white/5 space-y-2">
+                <span className="w-6 h-6 rounded-full bg-brand/20 text-brand-light border border-brand/30 flex items-center justify-center font-bold text-[11px]">3</span>
+                <p className="font-bold text-white font-sans">Paste Keys & Sync</p>
+                <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+                  In Supabase <strong>Project Settings &gt; API</strong>, copy the Project URL & anon key, paste them above, and click <strong>Push Local Edits</strong>!
+                </p>
+              </div>
+            </div>
+
+            {/* SQL Snippet Block */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                <span>SQL Schema for Table &lsquo;app_storage&rsquo;</span>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-[11px] font-mono border border-white/10 transition-colors cursor-pointer"
+                >
+                  <Copy className="w-3 h-3 text-brand-light" />
+                  <span>{copiedSql ? 'Copied SQL!' : 'Copy SQL Snippet'}</span>
+                </button>
+              </div>
+              <pre className="p-4 rounded-2xl bg-black border border-white/10 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed select-all">
+                {sqlSetupSnippet}
+              </pre>
+            </div>
+          </div>
+
+          {/* Zero-Setup Static Seed Export (Alternative) */}
+          <div className="p-6 rounded-3xl bg-zinc-950/70 border border-white/[0.08] shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                <HardDrive className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-sans font-bold text-white">
+                  Zero-Setup Static Export (Bake Data into Site)
+                </h4>
+                <p className="text-xs text-zinc-400">
+                  Prefer not to create any cloud accounts? You can export your current modpacks and thumbnail updates directly as code or a JSON file.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCopySeed}
+                className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-mono transition-colors cursor-pointer border border-white/10 flex items-center gap-2"
+              >
+                <Copy className="w-3.5 h-3.5 text-brand-light" />
+                <span>{copiedSeed ? 'Copied Full Catalog JSON!' : 'Copy Catalog as Seed JSON'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadSeed}
+                className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-mono transition-colors cursor-pointer border border-white/10 flex items-center gap-2"
+              >
+                <DownloadCloud className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Download doki-seed.json</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
+
 
       {/* DEEP MODPACK EDIT / CREATE MODAL */}
       {(isCreatingPack || editingPack) && (

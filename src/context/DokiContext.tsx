@@ -11,7 +11,11 @@ import {
   DownloadService, 
   CreateModpackDTO, 
   UpdateModpackDTO, 
-  db 
+  db,
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  testSupabaseConnection,
+  SupabaseConfig
 } from '../backend/index';
 import { useToast } from './ToastContext';
 import { sound } from '../utils/sound';
@@ -42,6 +46,10 @@ interface DokiContextType {
   resolveDownload: (modpackId: string) => Promise<{ downloadMirror: string; bypass: boolean } | null>;
   isEditingModpack: boolean;
   setIsEditingModpack: (editing: boolean) => void;
+  syncToCloud: () => Promise<{ success: boolean; message: string }>;
+  testCloudConnection: (config?: SupabaseConfig) => Promise<{ success: boolean; message: string; tableMissing?: boolean }>;
+  saveCloudConfig: (url: string, anonKey: string) => void;
+  getCloudConfig: () => SupabaseConfig | null;
 }
 
 const DokiContext = createContext<DokiContextType | undefined>(undefined);
@@ -300,6 +308,38 @@ export const DokiProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const syncToCloud = async () => {
+    try {
+      const res = await db.syncToCloud();
+      if (res.success) {
+        sound.playSuccess();
+        showToast(res.message, 'success');
+      } else {
+        sound.playFault();
+        showToast(res.message, 'error');
+      }
+      return res;
+    } catch (err: any) {
+      sound.playFault();
+      const msg = err?.message || 'Sync failed';
+      showToast(msg, 'error');
+      return { success: false, message: msg };
+    }
+  };
+
+  const testCloudConnection = async (config?: SupabaseConfig) => {
+    return testSupabaseConnection(config);
+  };
+
+  const saveCloudConfig = (url: string, anonKey: string) => {
+    saveSupabaseConfig(url, anonKey);
+    refreshData();
+  };
+
+  const getCloudConfig = () => {
+    return getSupabaseConfig();
+  };
+
   const featuredModpack = modpacks.find(m => m.id === platformConfig?.featuredModpackId) || modpacks[0] || null;
 
   return (
@@ -330,6 +370,10 @@ export const DokiProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         resolveDownload,
         isEditingModpack,
         setIsEditingModpack,
+        syncToCloud,
+        testCloudConnection,
+        saveCloudConfig,
+        getCloudConfig,
       }}
     >
       {children}

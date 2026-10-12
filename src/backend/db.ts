@@ -1,6 +1,6 @@
-// Persistent In-Memory Database with IndexedDB & Browser Storage Adapters
 import { User, Modpack, PermissionRequest, PlatformConfig, AuthSession } from './types';
 import { getSeedData } from './seed';
+import { getSupabaseConfig, fetchCloudItem, saveCloudItem, syncAllLocalToCloud } from './supabase';
 
 const STORAGE_KEY_PREFIX = 'doki_modpacks_db_';
 const DB_NAME = 'DokiModpackHub_v2';
@@ -238,6 +238,48 @@ class DatabaseStore {
             localStorage.setItem('doki_db_seeded', 'true');
           }
         }
+
+        // Check if Supabase cloud is configured for global synchronization
+        const supabaseConfig = getSupabaseConfig();
+        if (supabaseConfig) {
+          try {
+            const [cloudModpacks, cloudConfig, cloudRequests] = await Promise.all([
+              fetchCloudItem<Modpack[]>('modpacks'),
+              fetchCloudItem<PlatformConfig>('platform_config'),
+              fetchCloudItem<PermissionRequest[]>('permission_requests')
+            ]);
+
+            if (cloudModpacks && Array.isArray(cloudModpacks) && cloudModpacks.length > 0) {
+              this.state.modpacks.clear();
+              cloudModpacks.forEach(m => {
+                this.state.modpacks.set(m.id, m);
+                if (idbSupported) idbPut('modpacks', m);
+              });
+              this.saveToLocalStorage('modpacks', cloudModpacks);
+            } else if (this.state.modpacks.size > 0) {
+              saveCloudItem('modpacks', Array.from(this.state.modpacks.values()));
+            }
+
+            if (cloudConfig) {
+              this.state.platformConfig = cloudConfig;
+              if (idbSupported) idbPut('platform_config', cloudConfig);
+              this.saveToLocalStorage('platform_config', cloudConfig);
+            } else if (this.state.platformConfig) {
+              saveCloudItem('platform_config', this.state.platformConfig);
+            }
+
+            if (cloudRequests && Array.isArray(cloudRequests)) {
+              this.state.permissionRequests.clear();
+              cloudRequests.forEach(r => {
+                this.state.permissionRequests.set(r.id, r);
+                if (idbSupported) idbPut('permission_requests', r);
+              });
+              this.saveToLocalStorage('permission_requests', cloudRequests);
+            }
+          } catch (cloudErr) {
+            console.warn('[DatabaseStore] Supabase cloud sync warning:', cloudErr);
+          }
+        }
       } catch (err) {
         console.error('[DatabaseStore] Initialization fallback triggered:', err);
         try {
@@ -329,6 +371,7 @@ class DatabaseStore {
     this.state.modpacks.set(modpack.id, modpack);
     idbPut('modpacks', modpack);
     this.saveToLocalStorage('modpacks', Array.from(this.state.modpacks.values()));
+    saveCloudItem('modpacks', Array.from(this.state.modpacks.values()));
     return modpack;
   }
 
@@ -337,6 +380,7 @@ class DatabaseStore {
     if (existed) {
       idbDelete('modpacks', id);
       this.saveToLocalStorage('modpacks', Array.from(this.state.modpacks.values()));
+      saveCloudItem('modpacks', Array.from(this.state.modpacks.values()));
     }
     return existed;
   }
@@ -363,6 +407,7 @@ class DatabaseStore {
     this.state.permissionRequests.set(req.id, req);
     idbPut('permission_requests', req);
     this.saveToLocalStorage('permission_requests', Array.from(this.state.permissionRequests.values()));
+    saveCloudItem('permission_requests', Array.from(this.state.permissionRequests.values()));
     return req;
   }
 
@@ -397,7 +442,16 @@ class DatabaseStore {
     this.state.platformConfig = config;
     idbPut('platform_config', config);
     this.saveToLocalStorage('platform_config', config);
+    saveCloudItem('platform_config', config);
     return config;
+  }
+
+  public async syncToCloud(): Promise<{ success: boolean; message: string }> {
+    return syncAllLocalToCloud(
+      Array.from(this.state.modpacks.values()),
+      this.state.platformConfig,
+      Array.from(this.state.permissionRequests.values())
+    );
   }
 }
 
