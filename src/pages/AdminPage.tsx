@@ -128,7 +128,8 @@ export const AdminPage: React.FC = () => {
   const [formDiskSpace, setFormDiskSpace] = useState('12 GB Free SSD Space');
   const [formModsCount, setFormModsCount] = useState(248);
   const [formChangelog, setFormChangelog] = useState('');
-  const [formScreenshots, setFormScreenshots] = useState('');
+  const [formScreenshotsList, setFormScreenshotsList] = useState<string[]>([]);
+  const [newScreenshotUrl, setNewScreenshotUrl] = useState('');
 
   // Page Customizer State
   const [customSiteTitle, setCustomSiteTitle] = useState(platformConfig?.siteTitle || "Doki's Modpacks Hub");
@@ -527,7 +528,8 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
     setFormDiskSpace('12 GB Free SSD Space');
     setFormModsCount(248);
     setFormChangelog('v1.0.0 Initial Stable Release');
-    setFormScreenshots('');
+    setFormScreenshotsList([]);
+    setNewScreenshotUrl('');
     setIsCreatingPack(true);
   };
 
@@ -557,7 +559,8 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
     setFormDiskSpace(pack.specs.diskSpace || '12 GB Free SSD Space');
     setFormModsCount(pack.specs.totalModsCount || 248);
     setFormChangelog(pack.changelog || '');
-    setFormScreenshots(pack.screenshots ? pack.screenshots.join('\n') : '');
+    setFormScreenshotsList(pack.screenshots ? [...pack.screenshots] : []);
+    setNewScreenshotUrl('');
   };
 
   const closeForm = () => {
@@ -565,13 +568,61 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
     setIsCreatingPack(false);
   };
 
+  const handleAddScreenshotUrl = () => {
+    if (!newScreenshotUrl.trim()) return;
+    sound.playClick();
+    setFormScreenshotsList(prev => [...prev, newScreenshotUrl.trim()]);
+    setNewScreenshotUrl('');
+  };
+
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    sound.playClick();
+    const newShots: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const compressed = await compressImage(files[i]);
+        newShots.push(compressed);
+      } catch {
+        const reader = new FileReader();
+        await new Promise<void>((resolve) => {
+          reader.onload = () => {
+            if (typeof reader.result === 'string') newShots.push(reader.result);
+            resolve();
+          };
+          reader.readAsDataURL(files[i]);
+        });
+      }
+    }
+    if (newShots.length > 0) {
+      setFormScreenshotsList(prev => [...prev, ...newShots]);
+      sound.playSuccess();
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveScreenshot = (index: number) => {
+    sound.playClick();
+    setFormScreenshotsList(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveScreenshot = (index: number, direction: 'up' | 'down') => {
+    sound.playSwitch();
+    setFormScreenshotsList(prev => {
+      const list = [...prev];
+      const target = direction === 'up' ? index - 1 : index + 1;
+      if (target < 0 || target >= list.length) return prev;
+      const temp = list[index];
+      list[index] = list[target];
+      list[target] = temp;
+      return list;
+    });
+  };
+
   const handleSaveModpack = async (e: React.FormEvent) => {
     e.preventDefault();
     sound.playClick();
-
-    const parsedScreenshots = formScreenshots
-      ? formScreenshots.split('\n').map(s => s.trim()).filter(Boolean)
-      : [];
 
     const specsPayload = {
       minecraftVersion: formMcVersion,
@@ -603,7 +654,7 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
         trailerTitle: formTrailerTitle,
         specs: specsPayload,
         changelog: formChangelog,
-        screenshots: parsedScreenshots,
+        screenshots: formScreenshotsList,
       };
 
       const success = await updateModpack(editingPack.id, updateDTO);
@@ -626,7 +677,7 @@ We express our deepest gratitude to the Minecraft modding community and fabricMC
         trailerTitle: formTrailerTitle,
         specs: specsPayload,
         changelog: formChangelog,
-        screenshots: parsedScreenshots,
+        screenshots: formScreenshotsList,
       };
 
       const success = await createModpack(createDTO);
@@ -2487,54 +2538,251 @@ create policy "Public Access" on app_storage for all using (true);`;
                 </div>
               </div>
 
-              {/* Visual Assets & Thumbnails */}
-              <div className="space-y-4 pt-4 border-t border-white/[0.08]">
+              {/* Visual Assets, Thumbnails & In-Game Screenshots */}
+              <div className="space-y-5 pt-4 border-t border-white/[0.08]">
                 <h4 className="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold flex items-center gap-1.5">
                   <Image className="w-3.5 h-3.5" />
-                  <span>2. Visual Assets & Thumbnail Preview</span>
+                  <span>2. Visual Assets & In-Game Screenshots Gallery</span>
                 </h4>
 
+                {/* Primary Visuals: Thumbnail & Banner */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Thumbnail URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://images.unsplash.com/..."
-                      value={formThumbnail}
-                      onChange={(e) => setFormThumbnail(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-400"
-                    />
+                  {/* Thumbnail (Cover) */}
+                  <div className="p-4 rounded-2xl bg-zinc-950/60 border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-mono text-zinc-300 font-bold">
+                        Modpack Thumbnail (Card Cover)
+                      </label>
+                      {formThumbnail && (
+                        <button
+                          type="button"
+                          onClick={() => setFormThumbnail('')}
+                          className="text-[10px] font-mono text-rose-400 hover:underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://... or upload image"
+                        value={formThumbnail}
+                        onChange={(e) => setFormThumbnail(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-400"
+                      />
+                      <label className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-mono text-zinc-300 cursor-pointer transition-colors flex items-center gap-1.5 shrink-0">
+                        <Image className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Upload</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file, setFormThumbnail);
+                          }} 
+                        />
+                      </label>
+                    </div>
+
+                    {formThumbnail && (
+                      <div className="relative rounded-xl overflow-hidden border border-white/10 h-28 bg-black">
+                        <img 
+                          src={formThumbnail} 
+                          alt="Thumbnail Preview" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+                          <span className="text-[10px] font-mono text-zinc-300">Live Cover Preview</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Banner URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://images.unsplash.com/..."
-                      value={formBanner}
-                      onChange={(e) => setFormBanner(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-400"
-                    />
+                  {/* Banner (Hero / Detail Top Header) */}
+                  <div className="p-4 rounded-2xl bg-zinc-950/60 border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-mono text-zinc-300 font-bold">
+                        Hero Banner (Header Background)
+                      </label>
+                      {formBanner && (
+                        <button
+                          type="button"
+                          onClick={() => setFormBanner('')}
+                          className="text-[10px] font-mono text-rose-400 hover:underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://... or upload banner"
+                        value={formBanner}
+                        onChange={(e) => setFormBanner(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-400"
+                      />
+                      <label className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-mono text-zinc-300 cursor-pointer transition-colors flex items-center gap-1.5 shrink-0">
+                        <Image className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Upload</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file, setFormBanner);
+                          }} 
+                        />
+                      </label>
+                    </div>
+
+                    {formBanner && (
+                      <div className="relative rounded-xl overflow-hidden border border-white/10 h-28 bg-black">
+                        <img 
+                          src={formBanner} 
+                          alt="Banner Preview" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+                          <span className="text-[10px] font-mono text-zinc-300">Live Banner Preview</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Live Thumbnail Preview */}
-                {formThumbnail && (
-                  <div className="flex items-center gap-4 p-3 rounded-xl bg-zinc-900/50 border border-white/10">
-                    <img 
-                      src={formThumbnail} 
-                      alt="Thumbnail Preview" 
-                      className="w-16 h-16 rounded-lg object-cover border border-white/10"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="text-xs text-zinc-400">
-                      <span className="font-semibold text-white block">Visual Asset Loaded</span>
-                      This cover will display on the home hero, catalog cards, and detail page.
+                {/* IN-GAME VISUAL TRANSMISSIONS (SCREENSHOTS GALLERY) */}
+                <div className="p-5 rounded-2xl bg-zinc-950/80 border border-white/[0.08] space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+                    <div>
+                      <h5 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <span>In-Game Visual Transmissions</span>
+                        <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[10px]">
+                          {formScreenshotsList.length} Screenshots
+                        </span>
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        These images display under the &ldquo;In-Game Visual Transmissions&rdquo; gallery on the modpack detail page.
+                      </p>
                     </div>
+
+                    {/* Batch Upload Button */}
+                    <label className="px-3.5 py-2 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-mono font-bold transition-all shadow-md cursor-pointer flex items-center gap-2 shrink-0">
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Upload Screenshots</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        multiple 
+                        className="hidden" 
+                        onChange={handleScreenshotUpload} 
+                      />
+                    </label>
                   </div>
-                )}
+
+                  {/* Add URL Row */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Or paste screenshot image URL (https://...)"
+                      value={newScreenshotUrl}
+                      onChange={(e) => setNewScreenshotUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddScreenshotUrl();
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 rounded-lg bg-black border border-white/10 text-xs text-white focus:outline-none focus:border-brand font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddScreenshotUrl}
+                      disabled={!newScreenshotUrl.trim()}
+                      className="px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-zinc-200 text-xs font-mono border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-brand-light" />
+                      <span>Add URL</span>
+                    </button>
+                  </div>
+
+                  {/* Screenshots Grid Display */}
+                  {formScreenshotsList.length === 0 ? (
+                    <div className="p-8 rounded-xl border border-dashed border-white/10 text-center space-y-2">
+                      <Image className="w-8 h-8 text-zinc-600 mx-auto" />
+                      <p className="text-xs text-zinc-400 font-mono">No in-game screenshots attached yet.</p>
+                      <p className="text-[11px] text-zinc-500">
+                        Click &ldquo;Upload Screenshots&rdquo; to select files from your computer, or paste image URLs above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {formScreenshotsList.map((shot, idx) => (
+                        <div key={idx} className="group relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video flex flex-col justify-between">
+                          <img 
+                            src={shot} 
+                            alt={`Screenshot ${idx + 1}`} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          
+                          {/* Overlay Controls */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-2.5 flex flex-col justify-between">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/80 text-white border border-white/10">
+                                #{idx + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveScreenshot(idx)}
+                                className="p-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                                title="Remove screenshot"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-1 self-end">
+                              {idx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveScreenshot(idx, 'up')}
+                                  className="p-1 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono"
+                                  title="Move earlier"
+                                >
+                                  ←
+                                </button>
+                              )}
+                              {idx < formScreenshotsList.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveScreenshot(idx, 'down')}
+                                  className="p-1 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono"
+                                  title="Move later"
+                                >
+                                  →
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* System Requirements & Engine */}
